@@ -1,0 +1,99 @@
+{
+  "reviewed_at": "2026-10-04",
+  "branch": "m1-frontend",
+  "base_head": "1a6cf38",
+  "product_head": "e07bc9c",
+  "evaluation": "Stage 2 Step 1 final worktree, including housekeeping",
+  "upstream": {
+    "m2": "f84e6c0",
+    "m3": "ad99497",
+    "m4": "d3c66b3"
+  },
+  "m1_acceptance": "PASS",
+  "decision": "INTEGRATION_NO_GO",
+  "push_allowed": false,
+  "plan_start_allowed": false,
+  "scope": "M1 repairs only; user owns push and integration",
+  "flags": {
+    "F01": "FIXED",
+    "F02": "FIXED",
+    "F03": "FIXED",
+    "F04": "UNCHANGED_M2",
+    "F05": "UNCHANGED_M3",
+    "F06": "UNCHANGED_M3",
+    "F07": "UNCHANGED_M4",
+    "F08": "FIXED",
+    "F09": "FIXED_M1_SCOPE; server order_id recovery remains an M3 ask",
+    "F10": "FIXED_M1_DOCUMENTATION; producer OpenAPI and integration remain pending"
+  },
+  "gates": [
+    {
+      "id": "G0",
+      "status": "PASS",
+      "proof": "diff check, no protected path changes, no stale frontend field uses"
+    },
+    {
+      "id": "G1",
+      "status": "PASS",
+      "proof": "57 frontend tests, 11 fixture tests, production build exits 0"
+    },
+    {
+      "id": "G2",
+      "status": "PASS",
+      "proof": "M3 fixture contracts and actual React invariant rendering"
+    },
+    {
+      "id": "G3",
+      "status": "PASS",
+      "proof": "unavailable/malformed/negative data and late resource-response checks"
+    },
+    {
+      "id": "G4",
+      "status": "PASS",
+      "proof": "M4 example, 58 lottery tickets, neutral unknowns and real results validation"
+    },
+    {
+      "id": "G5",
+      "status": "FAIL",
+      "flags": [
+        "F04"
+      ],
+      "proof": "M2 verifier rejects current stub nonce [0]"
+    },
+    {
+      "id": "G6",
+      "status": "FAIL",
+      "flags": [
+        "F05",
+        "F06"
+      ],
+      "proof": "2 backend adapter errors; FCFS dispatch remains an owner finding"
+    },
+    {
+      "id": "G7",
+      "status": "FAIL",
+      "flags": [
+        "F07"
+      ],
+      "proof": "tampered snapshot bytes do not trigger a verifier error"
+    },
+    {
+      "id": "G8",
+      "status": "NOT_RUN",
+      "proof": "live integration, races, phone/tunnel, harness and real PSP require owner fixes and integration"
+    }
+  ],
+  "adversarial_frontend": {
+    "passed": 6,
+    "failed": 2,
+    "remaining_failures": [
+      "G5",
+      "G7"
+    ]
+  },
+  "adversarial_backend": {
+    "passed": 0,
+    "errors": 2
+  },
+  "evidence_kind": "snapshot; rerun remaining checks after owner changes land"
+}
