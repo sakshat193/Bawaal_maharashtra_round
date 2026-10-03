@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "gen:api": "openapi-typescript ../contracts/openapi.yaml -o src/api/schema.d.ts"
   },
   "dependencies": {
     "react": "^18.3.1",
