@@ -1,84 +1,98 @@
 const MAX_DOTS = 6000;
+const isCount = value => Number.isSafeInteger(value) && value >= 0;
+const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 
-function count(value) {
-  return Number.isSafeInteger(value) ? Math.max(0, value) : 0;
+export function resultsShapeError(value) {
+  if (!object(value)) return 'results';
+  if (value.schema_version !== 1) return 'schema_version';
+  if (typeof value.source !== 'string' || !value.source) return 'source';
+  if (!Array.isArray(value.modes) || !value.modes.length) return 'modes';
+  const ids = new Set();
+  for (const [index, mode] of value.modes.entries()) {
+    const path = `modes[${index}]`;
+    if (!object(mode) || typeof mode.mode !== 'string' || !mode.mode || ids.has(mode.mode)) return `${path}.mode`;
+    ids.add(mode.mode);
+    for (const field of ['entries', 'identities', 'tickets_won']) if (!isCount(mode[field])) return `${path}.${field}`;
+    for (const field of ['bot_ticket_share','bot_identity_share','bot_share_ratio']) {
+      if (!Number.isFinite(mode[field]) || mode[field] < 0 || (field !== 'bot_share_ratio' && mode[field] > 1)) return `${path}.${field}`;
+    }
+    if (!object(mode.profiles)) return `${path}.profiles`;
+    for (const [name, profile] of Object.entries(mode.profiles)) {
+      if (!object(profile)) return `${path}.profiles.${name}`;
+      for (const field of ['identities','entries','tickets_won']) if (!isCount(profile[field])) return `${path}.profiles.${name}.${field}`;
+      if (profile.bot !== undefined && typeof profile.bot !== 'boolean') return `${path}.profiles.${name}.bot`;
+      if (profile.cohort !== undefined && typeof profile.cohort !== 'string') return `${path}.profiles.${name}.cohort`;
+    }
+    if (!object(mode.groups_vs_singles)) return `${path}.groups_vs_singles`;
+    for (const field of ['group_members','singles']) if (!isCount(mode.groups_vs_singles[field])) return `${path}.groups_vs_singles.${field}`;
+    const ratio = mode.groups_vs_singles.ratio;
+    if (ratio !== null && (!Number.isFinite(ratio) || ratio < 0)) return `${path}.groups_vs_singles.ratio`;
+    if (!object(mode.exclusions_per_rule) || Object.values(mode.exclusions_per_rule).some(n => !isCount(n))) return `${path}.exclusions_per_rule`;
+    if (!object(mode.invariants)) return `${path}.invariants`;
+    for (const field of ['held_within_capacity','held_matches_active_offers']) if (typeof mode.invariants[field] !== 'boolean') return `${path}.invariants.${field}`;
+    for (const field of ['oversell','double_redemption']) if (!isCount(mode.invariants[field])) return `${path}.invariants.${field}`;
+    for (const [owner, checks] of [['mode',mode.attack_checks], ...Object.entries(mode.profiles).map(([name,p]) => [name,p.attack_checks])]) {
+      if (checks === undefined) continue;
+      if (!object(checks) || Object.values(checks).some(check => !object(check) || typeof check.passed !== 'boolean')) return `${path}.${owner}.attack_checks`;
+    }
+  }
+  for (const id of ['naive_fcfs','hardened_fcfs','lottery_wil']) if (!ids.has(id)) return `modes.${id}`;
+  return null;
 }
+
+export const validResults = value => resultsShapeError(value) === null;
 
 function profilesOf(mode) {
   return Object.entries(mode?.profiles || {}).map(([name, profile]) => ({
-    name,
-    bot: Boolean(profile.bot),
-    group: Boolean(profile.group),
-    identities: count(profile.identities),
-    entries: count(profile.entries),
-    tickets: count(profile.tickets)
+    name, bot: profile.bot, classification: profile.bot === true ? 'bot' : profile.bot === false ? 'honest' : 'unknown',
+    group: profile.cohort === 'group_members', identities: profile.identities || 0,
+    entries: profile.entries || 0, tickets: profile.tickets_won || 0
   }));
 }
 
 export function summarizeMode(mode) {
-  const profiles = profilesOf(mode);
-  const summary = profiles.reduce((result, profile) => {
-    result.identities += profile.identities;
-    result.tickets += profile.tickets;
-    if (profile.bot) {
-      result.botIdentities += profile.identities;
-      result.botTickets += profile.tickets;
-    }
-    if (profile.group) {
-      result.groupIdentities += profile.identities;
-      result.groupTickets += profile.tickets;
-    } else {
-      result.singleIdentities += profile.identities;
-      result.singleTickets += profile.tickets;
-    }
-    return result;
-  }, {
-    identities: 0,
-    botIdentities: 0,
-    tickets: 0,
-    botTickets: 0,
-    groupIdentities: 0,
-    singleIdentities: 0,
-    groupTickets: 0,
-    singleTickets: 0
-  });
-  summary.botTicketShare = summary.tickets ? summary.botTickets / summary.tickets : 0;
-  summary.botIdentityShare = summary.identities ? summary.botIdentities / summary.identities : 0;
-  summary.botShareRatio = summary.botIdentityShare ? summary.botTicketShare / summary.botIdentityShare : 0;
-  summary.exclusions = Object.entries(mode?.exclusions_by_rule || {})
-    .map(([rule, value]) => ({ rule, count: count(value) }))
-    .sort((a, b) => a.rule.localeCompare(b.rule));
-  return summary;
+  const unknown = profilesOf(mode).filter(profile => profile.classification === 'unknown');
+  return {
+    tickets: mode?.tickets_won || 0,
+    botTicketShare: mode?.bot_ticket_share ?? 0,
+    botIdentityShare: mode?.bot_identity_share ?? 0,
+    botShareRatio: mode?.bot_share_ratio ?? 0,
+    groupsVsSingles: mode?.groups_vs_singles,
+    unknownTickets: unknown.reduce((sum,p) => sum+p.tickets,0),
+    unknownEntries: unknown.reduce((sum,p) => sum+p.entries,0),
+    exclusions: Object.entries(mode?.exclusions_per_rule || {}).map(([rule,count]) => ({rule,count})).sort((a,b)=>a.rule.localeCompare(b.rule))
+  };
 }
 
 export function viewMode(mode) {
   const profiles = profilesOf(mode);
   const totalTickets = profiles.reduce((sum, profile) => sum + profile.tickets, 0);
   const unitSize = Math.max(1, Math.ceil(totalTickets / MAX_DOTS));
-  return {
-    unitSize,
-    profiles: profiles.map(profile => ({
-      ...profile,
-      dots: Math.min(MAX_DOTS, Math.ceil(profile.tickets / unitSize))
-    }))
-  };
+  return { unitSize, profiles: profiles.map(profile => ({...profile,dots:Math.ceil(profile.tickets/unitSize)})) };
 }
 
 export function sceneCounts(mode) {
-  return profilesOf(mode).reduce((totals, profile) => {
-    totals[profile.bot ? 'bots' : 'honest'] += profile.entries;
+  return profilesOf(mode).reduce((totals,profile) => {
+    totals[profile.classification === 'bot' ? 'bots' : profile.classification] += profile.entries;
     totals.seats += profile.tickets;
     return totals;
-  }, { honest: 0, bots: 0, seats: 0 });
+  }, {honest:0,bots:0,unknown:0,seats:0});
 }
 
-export function invariantFailures(invariants) {
-  if (!invariants) return null;
+export function invariantFailures(inv) {
+  if (!Array.isArray(inv?.tiers) || !inv.tiers.length) return null;
   const failures = [];
-  for (const tier of invariants.tiers || []) {
-    if (tier.held > tier.capacity) failures.push(`${tier.tier_id}: held exceeds capacity`);
-    if (tier.held !== tier.active_quantity) failures.push(`${tier.tier_id}: held differs from active quantity`);
+  for (const tier of inv.tiers) {
+    const name = tier?.tier_id || 'Unnamed tier';
+    for (const field of ['held','capacity','active_offer_units']) {
+      if (!isCount(tier?.[field])) failures.push(`${name}: invalid ${field}`);
+    }
+    if (isCount(tier?.held) && isCount(tier?.capacity) && tier.held > tier.capacity) failures.push(`${name}: held exceeds capacity`);
+    if (isCount(tier?.held) && isCount(tier?.active_offer_units) && tier.held !== tier.active_offer_units) failures.push(`${name}: held differs from active offer units`);
   }
-  if (invariants.entries_with_multiple_offers !== 0) failures.push('Multiple active offers exist');
+  for (const field of ['oversell','held_mismatch','double_redemption']) {
+    if (!isCount(inv[field])) failures.push(`Invalid ${field}`);
+    else if (inv[field] !== 0) failures.push(`${field}: ${inv[field]}`);
+  }
   return failures;
 }

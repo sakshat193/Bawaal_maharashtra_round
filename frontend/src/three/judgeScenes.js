@@ -3,31 +3,35 @@ import * as T from 'three';
 const MAX_POINTS = 6000;
 const CYAN = new T.Color('#67E8F9');
 const AMBER = new T.Color('#F59E0B');
+const NEUTRAL = new T.Color('#8A8A9A');
 
 function safeCount(value) {
   return Number.isSafeInteger(value) ? Math.max(0, value) : 0;
 }
 
-function scaledWorld(input = {}) {
+export function scaledWorld(input = {}) {
   const honest = safeCount(input.honest);
   const bots = safeCount(input.bots);
+  const unknown = safeCount(input.unknown);
   const seats = safeCount(input.seats);
-  const unitSize = Math.max(1, Math.ceil(Math.max(honest + bots, seats) / MAX_POINTS));
-  const entryPoints = Math.min(MAX_POINTS, Math.ceil((honest + bots) / unitSize));
-  const exact = [honest / unitSize, bots / unitSize];
+  const unitSize = Math.max(1, Math.ceil(Math.max(honest + bots + unknown, seats) / MAX_POINTS));
+  const entryPoints = Math.min(MAX_POINTS, Math.ceil((honest + bots + unknown) / unitSize));
+  const exact = [honest / unitSize, bots / unitSize, unknown / unitSize];
   const points = exact.map(Math.floor);
-  let remaining = entryPoints - points[0] - points[1];
+  let remaining = entryPoints - points[0] - points[1] - points[2];
   if (remaining > 0) {
-    const order = [0, 1].sort((a, b) => (exact[b] - points[b]) - (exact[a] - points[a]) || a - b);
+    const order = [0, 1, 2].sort((a, b) => (exact[b] - points[b]) - (exact[a] - points[a]) || a - b);
     for (let index = 0; index < remaining; index++) points[order[index % order.length]]++;
   }
   return {
     honest,
     bots,
+    unknown,
     seats,
     unitSize,
     honestPoints: points[0],
     botPoints: points[1],
+    unknownPoints: points[2],
     seatPoints: Math.min(MAX_POINTS, Math.ceil(seats / unitSize))
   };
 }
@@ -54,15 +58,16 @@ function fit(surface, el, targetY) {
 }
 
 function addEntryCloud(scene, world) {
-  const count = world.honestPoints + world.botPoints;
+  const count = world.honestPoints + world.botPoints + world.unknownPoints;
   if (!count) return null;
   const positions = new Float32Array(count * 3);
   const colors = new Float32Array(count * 3);
   const goldenAngle = Math.PI * (3 - Math.sqrt(5));
   for (let index = 0; index < count; index++) {
-    const bot = index >= world.honestPoints;
-    const localIndex = bot ? index - world.honestPoints : index;
-    const localCount = bot ? world.botPoints : world.honestPoints;
+    const unknown = index >= world.honestPoints + world.botPoints;
+    const bot = !unknown && index >= world.honestPoints;
+    const localIndex = unknown ? index - world.honestPoints - world.botPoints : bot ? index - world.honestPoints : index;
+    const localCount = unknown ? world.unknownPoints : bot ? world.botPoints : world.honestPoints;
     const y = 1 - 2 * (localIndex + 0.5) / Math.max(1, localCount);
     const ring = Math.sqrt(1 - y * y);
     const angle = goldenAngle * localIndex;
@@ -71,7 +76,7 @@ function addEntryCloud(scene, world) {
     positions[index * 3] = Math.cos(angle) * ring * radius + offset;
     positions[index * 3 + 1] = y * radius * 0.48 + (bot ? 0.25 : 0);
     positions[index * 3 + 2] = Math.sin(angle) * ring * radius - offset * 0.6;
-    const color = bot ? AMBER : CYAN;
+    const color = unknown ? NEUTRAL : bot ? AMBER : CYAN;
     colors[index * 3] = color.r;
     colors[index * 3 + 1] = color.g;
     colors[index * 3 + 2] = color.b;
