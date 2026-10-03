@@ -48,6 +48,14 @@ const WORLD = {
   server_time: '2026-10-04T13:05:00Z',
 };
 
+const PHASE_SERVER_TIME = {
+  scheduled: '2026-10-04T12:55:00Z',
+  open: WORLD.server_time,
+  sealed: '2026-10-04T13:11:00Z',
+  drawn: '2026-10-04T13:13:00Z',
+  settled: '2026-10-04T13:30:00Z'
+};
+
 const canonicalJson = value => {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
   if (value && typeof value === 'object') {
@@ -190,7 +198,7 @@ function buildFixtures() {
       sealed_at: WORLD.closes_at,
       timestamped_at: evidenceHeaders['X-Fairdrop-Timestamped-At']
     } : null,
-    server_time: WORLD.server_time
+    server_time: PHASE_SERVER_TIME[phase]
   });
 
   const open = makeDrop('open');
@@ -228,7 +236,7 @@ function buildFixtures() {
   };
   const makeMe = (phase, status, rank = null, waitlist_position = null, exclusion_reason = null, offer = null) => ({
     phase,
-    server_time: WORLD.server_time,
+    server_time: PHASE_SERVER_TIME[phase],
     entry: status ? makeEntry(status, rank, waitlist_position, exclusion_reason) : null,
     offer
   });
@@ -256,7 +264,7 @@ function buildFixtures() {
       };
     }),
     entries_with_multiple_offers: 0,
-    server_time: WORLD.server_time
+    server_time: PHASE_SERVER_TIME[phaseDrop.phase]
   });
   const activeOutcomeIds = new Set();
   for (const tier of WORLD.tiers) {

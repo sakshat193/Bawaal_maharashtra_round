@@ -11,10 +11,19 @@ const hash = value => createHash('sha256').update(value).digest('hex');
 
 test('drop fixtures follow the detail contract and keep the round-zero draw full', () => {
   const open = fixture('./getDrop.200.json');
+  const scheduled = fixture('./getDrop.200.scheduled.json');
   const sealed = fixture('./getDrop.200.sealed.json');
   const drawn = fixture('./getDrop.200.drawn.json');
+  const settled = fixture('./getDrop.200.settled.json');
   const draw = fixture('./getDraw.200.json');
   const drawnInvariants = fixture('./getInvariants.200.drawn.json');
+  const phaseTimes = {
+    scheduled: scheduled.server_time,
+    open: open.server_time,
+    sealed: sealed.server_time,
+    drawn: drawn.server_time,
+    settled: settled.server_time
+  };
   const expectedTiers = [
     ['gold', 'Gold', 450000, 300],
     ['silver', 'Silver', 250000, 900],
@@ -29,6 +38,11 @@ test('drop fixtures follow the detail contract and keep the round-zero draw full
   assert.equal(open.entry_count, undefined);
   assert.equal(open.drand_round_due_at, '2026-10-04T13:12:30Z');
   assert.equal(open.snapshot, null);
+  assert.ok(Date.parse(scheduled.server_time) < Date.parse(scheduled.opens_at));
+  assert.ok(Date.parse(open.server_time) < Date.parse(open.closes_at));
+  assert.ok(Date.parse(sealed.server_time) > Date.parse(sealed.closes_at));
+  assert.ok(Date.parse(drawn.server_time) > Date.parse(drawn.drand_round_due_at));
+  assert.ok(Date.parse(settled.server_time) > Date.parse(drawn.server_time));
   assert.deepEqual(open.tiers.map(({ tier_id, name, price_paise, capacity }) => [tier_id, name, price_paise, capacity]), expectedTiers);
   for (const tier of open.tiers) {
     assert.deepEqual(Object.keys(tier).sort(), ['capacity', 'name', 'price_paise', 'tier_id']);
@@ -44,6 +58,19 @@ test('drop fixtures follow the detail contract and keep the round-zero draw full
     const drop = fixture(`./${file}`);
     assert.deepEqual(drop.tiers.map(({ tier_id, name, price_paise, capacity }) => [tier_id, name, price_paise, capacity]), expectedTiers);
     assert.ok(drop.tiers.every(tier => Object.keys(tier).sort().join(',') === 'capacity,name,price_paise,tier_id'));
+  }
+
+  for (const file of readdirSync(fixtureDirectory).filter(file => /^getMe\.\d+.*\.json$/.test(file))) {
+    const me = fixture(`./${file}`);
+    assert.equal(me.server_time, phaseTimes[me.phase], `${file} uses its phase time`);
+  }
+  for (const [file, phase] of [
+    ['getInvariants.200.json', 'open'],
+    ['getInvariants.200.open.json', 'open'],
+    ['getInvariants.200.drawn.json', 'drawn'],
+    ['getInvariants.200.settled.json', 'settled']
+  ]) {
+    assert.equal(fixture(`./${file}`).server_time, phaseTimes[phase], `${file} uses its phase time`);
   }
 
   assert.equal(draw.ranked.length, 8975);
