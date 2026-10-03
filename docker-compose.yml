@@ -1,0 +1,75 @@
+# Fair Drop dev stack. Owner: Member 2.
+#   docker compose up            postgres:16 + keys + migrate + api + web
+#   docker compose up postgres   just the database (host port 5433, used by the tests)
+# Postgres is published on 5433 so it never collides with a local Postgres on 5432.
+
+x-api-env: &api-env
+  DATABASE_URL: postgresql://fairdrop:fairdrop@postgres:5432/fairdrop
+  ADMIN_KEY: ${ADMIN_KEY:-dev-admin-key-change-me}
+  PLATFORM_KEY_FILE: /keys/platform_ed25519.pem
+  RECEIPT_KEY_FILE: /keys/receipt_ed25519.pem
+  POW_KEY_FILE: /keys/pow_hmac.key
+  DEMO_MODE: ${DEMO_MODE:-true}
+  TURNSTILE_SECRET: ${TURNSTILE_SECRET:-1x0000000000000000000000000000000AA}
+  RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
+  RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+  TIMESTAMP_BACKENDS: ${TIMESTAMP_BACKENDS:-ots}
+  TIMESTAMP_GIT_DIR: ${TIMESTAMP_GIT_DIR:-}
+  TIMESTAMP_GIT_WEB_URL: ${TIMESTAMP_GIT_WEB_URL:-}
+  RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+  CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: fairdrop
+      POSTGRES_PASSWORD: fairdrop
+      POSTGRES_DB: fairdrop
+    ports: ["5433:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fairdrop -d fairdrop"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  keys:
+    image: fairdrop-api:dev
+    command: ["python", "/srv/scripts/gen_keys.py", "--dir", "/keys"]
+    volumes: [./keys:/keys]
+
+  migrate:
+    image: fairdrop-api:dev
+    command: ["python", "-m", "app.migrate"]
+    environment: *api-env
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  api:
+    image: fairdrop-api:dev       # keys and migrate reuse this one image
+    build: { context: ., dockerfile: api/Dockerfile }
+    environment: *api-env
+    ports: ["8000:8000"]
+    volumes: [./keys:/keys:ro]
+    depends_on:
+      keys: { condition: service_completed_successfully }
+      migrate: { condition: service_completed_successfully }
+    # keys/migrate use the image this service builds: run `docker compose build api` first,
+    # or `docker compose up --build`.
+
+  web:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    environment:
+      VITE_PROXY_TARGET: http://api:8000
+      VITE_DROP_ID: ${FAIRDROP_DROP_ID:-}
+    ports: ["5173:5173"]
+    volumes:
+      - ./frontend:/app
+      - web_node_modules:/app/node_modules
+
+volumes:
+  pgdata:
+  web_node_modules:

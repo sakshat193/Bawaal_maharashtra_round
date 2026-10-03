@@ -12,7 +12,6 @@ export const CONCERTS = [
 export const TIERS = [
   { id: 'floor', name: 'Floor · standing', mult: 1.9, cap: 1200, bias: 0.15, color: '#C4B5FD' },
   { id: 'lower', name: 'Lower bowl', mult: 1.5, cap: 2000, bias: 0, color: '#A78BFA' },
-  { id: 'club', name: 'Club boxes', mult: 2.6, cap: 400, bias: 0.1, color: '#F5D0FE' },
   { id: 'upper', name: 'Upper bowl', mult: 1, cap: 2400, bias: -0.12, color: '#93C5FD' }
 ];
 
