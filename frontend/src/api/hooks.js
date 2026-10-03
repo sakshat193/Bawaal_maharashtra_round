@@ -17,6 +17,7 @@ export function usePoll(load, interval, enabled = true) {
   const [refreshKey, setRefreshKey] = useState(0);
   const dataRef = useRef(data);
   const intervalRef = useRef(interval);
+  const shouldPoll = typeof enabled === 'function' ? enabled() : enabled;
   dataRef.current = data;
   intervalRef.current = interval;
 
@@ -24,7 +25,7 @@ export function usePoll(load, interval, enabled = true) {
     let active = true;
     let timer;
     let controller;
-    if (!enabled) {
+    if (!shouldPoll) {
       setData(null);
       setError(null);
       return undefined;
@@ -58,7 +59,7 @@ export function usePoll(load, interval, enabled = true) {
       clearTimeout(timer);
       controller?.abort();
     };
-  }, [enabled, load, refreshKey]);
+  }, [shouldPoll, load, refreshKey]);
 
   const refresh = useCallback(() => setRefreshKey(value => value + 1), []);
   return { data, error, refresh };
@@ -94,11 +95,21 @@ export function useMe(dropId, phase) {
     if (status === 'offered' || status === 'payment_pending') return [1000, 2000];
     return phaseInterval(phase || me?.phase);
   }, [phase]);
-  return usePoll(load, interval, Boolean(dropId) && hasIdentity());
+  return usePoll(load, interval, () => Boolean(dropId) && hasIdentity());
 }
 
 export function useInvariants(dropId, phase) {
   const load = useCallback(({ signal }) => api(`/api/drops/${encodeURIComponent(dropId)}/invariants`, { signal }), [dropId]);
   const interval = useCallback(() => phaseInterval(phase), [phase]);
   return usePoll(load, interval, Boolean(dropId));
+}
+
+export function useDraw(dropId, phase) {
+  const load = useCallback(({ signal }) => api(`/api/drops/${encodeURIComponent(dropId)}/draw`, { signal }), [dropId]);
+  return usePoll(load, [15000, 20000], Boolean(dropId) && (phase === 'drawn' || phase === 'settled'));
+}
+
+export function useSnapshot(dropId, phase) {
+  const load = useCallback(({ signal }) => api(`/api/drops/${encodeURIComponent(dropId)}/snapshot`, { signal, includeHeaders: true }), [dropId]);
+  return usePoll(load, [30000, 60000], Boolean(dropId) && ['sealed', 'drawn', 'settled'].includes(phase));
 }

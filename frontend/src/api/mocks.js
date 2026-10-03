@@ -1,5 +1,7 @@
 import { http, HttpResponse } from 'msw';
 import { setupWorker } from 'msw/browser';
+import { applyCreatedReceipt, createEntryResponse } from './mockEntries.js';
+import { initialScenario } from './scenarios.js';
 
 const jsonFiles = import.meta.glob('../../../contracts/fixtures/*.json', {
   eager: true,
@@ -52,9 +54,9 @@ function queryScenario() {
 let scenarioSeeded = false;
 function currentScenario() {
   if (!scenarioSeeded) {
-    const requested = queryScenario();
-    if (requested && MOCK_SCENARIOS[requested]) {
-      sessionStorage.setItem('fd.scenario', requested);
+    const initial = initialScenario(sessionStorage.getItem('fd.scenario'), queryScenario(), MOCK_SCENARIOS);
+    if (initial.seed) {
+      sessionStorage.setItem('fd.scenario', initial.scenario);
       if (!sessionStorage.getItem('fd.jwt')) sessionStorage.setItem('fd.jwt', 'mock.identity.token');
     }
     scenarioSeeded = true;
@@ -124,18 +126,28 @@ export const worker = setupWorker(
   http.get('/api/drops/:dropId', () => HttpResponse.json(dropForScenario())),
   http.post('/platform/login', () => HttpResponse.json(getFixture(json, 'login.200.json'))),
   http.get('/api/drops/:dropId/pow-challenge', () => HttpResponse.json(getFixture(json, 'getPowChallenge.200.json'))),
-  http.post('/api/drops/:dropId/entries', () => {
+  http.post('/api/drops/:dropId/entries', async ({ request }) => {
     const error = consumeNextError();
     if (error) return error;
+    const requestBody = await request.json();
+    const response = createEntryResponse(getFixture(json, 'createEntry.201.json'), requestBody);
     setScenario('registered');
-    return HttpResponse.json(getFixture(json, 'createEntry.201.json'), { status: 201 });
+    return HttpResponse.json(response, { status: 201 });
   }),
   http.get('/api/drops/:dropId/snapshot', () => ndjsonResponse('getSnapshot')),
   http.get('/api/drops/:dropId/exclusions', () => ndjsonResponse('getExclusions')),
   http.get('/api/keys', () => HttpResponse.json(getFixture(json, 'getKeys.200.json'))),
-  http.get('/api/drops/:dropId/me', () => {
+  http.get('/api/drops/:dropId/me', ({ params }) => {
     const scenario = currentScenario();
-    const me = getFixture(json, scenarioMeName(scenario));
+    let me = getFixture(json, scenarioMeName(scenario));
+    if (scenario === 'registered') {
+      try {
+        const receipt = JSON.parse(sessionStorage.getItem(`fd.receipt.${params.dropId}`) || 'null')?.receipt;
+        me = applyCreatedReceipt(me, receipt);
+      } catch {
+        // Use the static registered fixture if this device has no saved receipt.
+      }
+    }
     return HttpResponse.json({ ...me, phase: MOCK_SCENARIOS[scenario].drop });
   }),
   http.get('/api/drops/:dropId/draw', () => HttpResponse.json(getFixture(json, 'getDraw.200.json'))),

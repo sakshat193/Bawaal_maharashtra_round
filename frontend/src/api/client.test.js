@@ -95,3 +95,24 @@ test('api returns NDJSON as text without calling response.json', async t => {
 
   assert.equal(await api('/api/drops/drop-id/snapshot'), ndjson);
 });
+
+test('api can return NDJSON and its evidence headers together', async t => {
+  const ndjson = '{"entry_id":"one"}\n';
+  installGlobals(t, {
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      headers: new Headers({
+        'Content-Type': 'application/x-ndjson',
+        'X-Fairdrop-Timestamped-At': '2026-10-04T13:12:00Z'
+      }),
+      text: async () => ndjson,
+      json() { assert.fail('NDJSON must not be parsed as JSON'); }
+    })
+  });
+
+  const response = await api('/api/drops/drop-id/snapshot', { includeHeaders: true });
+
+  assert.equal(response.data, ndjson);
+  assert.equal(response.headers.get('X-Fairdrop-Timestamped-At'), '2026-10-04T13:12:00Z');
+});

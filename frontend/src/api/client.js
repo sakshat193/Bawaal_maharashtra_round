@@ -41,9 +41,9 @@ function clearIdentity() {
 
 /**
  * @param {ApiPath} path
- * @param {{method?: string, body?: unknown, admin?: boolean, signal?: AbortSignal}} [options]
+ * @param {{method?: string, body?: unknown, admin?: boolean, signal?: AbortSignal, includeHeaders?: boolean}} [options]
  */
-export async function api(path, { method = 'GET', body, admin = false, signal } = {}) {
+export async function api(path, { method = 'GET', body, admin = false, signal, includeHeaders = false } = {}) {
   const headers = new Headers();
   const adminRoute = admin || String(path).startsWith('/api/admin/');
   const credential = stored(adminRoute ? 'fd.admin' : 'fd.jwt');
@@ -67,5 +67,5 @@ export async function api(path, { method = 'GET', body, admin = false, signal } 
     if (response.status === 401) clearIdentity();
     throw new ApiError(response.status, data?.error || 'request_failed', data);
   }
-  return data;
+  return includeHeaders ? { data, headers: response.headers } : data;
 }

@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { useDraw, useDrop, useInvariants, useMe, useSnapshot } from '../api/hooks.js';
 import { messageForError } from '../api/messages.js';
-import { useDrop, useInvariants, useMe } from '../api/hooks.js';
 import { screenFor } from './screen.js';
+import DropDetail from './DropDetail.jsx';
+import { Registered, Results, Sealed } from './StatusScreens.jsx';
 
 function hasToken() {
   try {
@@ -12,44 +14,75 @@ function hasToken() {
   }
 }
 
-function inr(paise) {
-  return `₹${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(paise / 100)}`;
-}
-
 export default function DropPage() {
   const { dropId } = useParams();
   const [entering, setEntering] = useState(false);
   const drop = useDrop(dropId);
   const me = useMe(dropId, drop.data?.phase);
   const invariants = useInvariants(dropId, drop.data?.phase);
+  const draw = useDraw(dropId, drop.data?.phase);
+  const snapshot = useSnapshot(dropId, drop.data?.phase);
+  const screen = screenFor(drop.data?.phase, me.data, hasToken());
 
-  if (drop.error && !drop.data) return <main className="c-main"><p role="alert">{messageForError(drop.error)}</p></main>;
-  if (!drop.data) return <main className="c-main"><p role="status">Loading drop…</p></main>;
+  function refreshAll() {
+    drop.refresh();
+    me.refresh();
+    invariants.refresh();
+    draw.refresh();
+    snapshot.refresh();
+  }
 
-  const screen = screenFor(drop.data.phase, me.data, hasToken());
+  if (drop.error && !drop.data) {
+    return <main className="c-main"><p role="alert">{messageForError(drop.error)}</p></main>;
+  }
+  if (!drop.data) return <main className="c-main"><p role="status" style={{ paddingTop: 40 }}>Loading drop…</p></main>;
+
+  const data = drop.data;
+  const entry = me.data?.entry;
+  const inventoryError = invariants.error && !invariants.data ? messageForError(invariants.error) : null;
+
   return (
-    <main className="c-main" data-screen={screen}>
-      <Link to="/" className="c-sub">← Home</Link>
-      <p className="c-sub">Fair Drop · {drop.data.phase}</p>
-      <h1 className="c-title">{drop.data.name}</h1>
-      <p>{drop.data.venue}</p>
-      <p>{screen === 'detail' ? 'Choose a ticket tier to see the current drop details.' : `Your entry is ${screen.replaceAll('_', ' ')}.`}</p>
-      {screen === 'detail' && (
-        <button className="btn btn-light" type="button" onClick={() => setEntering(true)}>
-          {entering ? 'Entry form' : 'Register interest'}
-        </button>
-      )}
-      {entering && <p role="status">Entry details will appear here.</p>}
-      <ul>
-        {drop.data.tiers.map(tier => {
-          const inventory = invariants.data?.tiers?.find(item => item.tier_id === tier.tier_id);
-          return (
-            <li key={tier.tier_id}>
-              {tier.name} · {inr(tier.price_paise)} · {inventory ? `${tier.capacity - inventory.held} available` : 'Inventory loading'}
-            </li>
-          );
-        })}
-      </ul>
-    </main>
+    <div className="c-shell" data-screen={screen}>
+      <header className="c-nav">
+        <div className="c-nav-in">
+          <Link className="c-brand" to="/" aria-label="Fair Drop home"><i /><b>FAIR DROP</b></Link>
+          <nav className="c-nav-r" aria-label="Fair Drop links">
+            <Link className="c-iconbtn" to={`/verify/${encodeURIComponent(dropId)}`}>Verify</Link>
+            <Link className="c-iconbtn" to="/judges">Judges</Link>
+          </nav>
+        </div>
+      </header>
+      <main className="c-main">
+        <Link to="/" className="link-back">← All drops</Link>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 14, paddingTop: 14 }}>
+          <span className="c-kicker">{data.phase} · {data.allocation_mode.replaceAll('_', ' ')}</span>
+          <Link className="c-sub" to={`/verify/${encodeURIComponent(dropId)}`}>Published evidence</Link>
+        </div>
+
+        {screen === 'detail' && (
+          <DropDetail
+            drop={data}
+            invariants={invariants.data}
+            entering={entering}
+            onEnter={() => setEntering(true)}
+            onCloseEntry={() => setEntering(false)}
+            refresh={refreshAll}
+            onLogin={me.refresh}
+          />
+        )}
+        {screen === 'registered' && <Registered drop={data} />}
+        {screen === 'sealed' && <Sealed drop={data} snapshot={snapshot.data} />}
+        {!['detail', 'registered', 'sealed'].includes(screen) && me.data?.entry && (
+          <Results
+            drop={data}
+            me={me.data}
+            draw={draw.data}
+            refresh={refreshAll}
+          />
+        )}
+        {inventoryError && screen === 'detail' && <p role="status" className="fd-error">{inventoryError}</p>}
+        {me.error && !me.data && hasToken() && <p role="alert" className="fd-error">{messageForError(me.error)}</p>}
+      </main>
+    </div>
   );
 }
