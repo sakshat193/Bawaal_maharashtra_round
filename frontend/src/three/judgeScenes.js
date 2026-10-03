@@ -1,102 +1,217 @@
 import * as T from 'three';
 
-/** SUBNET CLUSTERING point cloud + THE ARENA seat bowl for the judge dashboard. */
-export function createJudgeScenes(cloudEl, arenaEl, { reduced = false, getCap = () => true, onClaimed = () => {} } = {}) {
-  const mk = el => {
-    const r = new T.WebGLRenderer({ antialias: true, alpha: true });
-    r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); r.setClearColor(0, 0);
-    r.domElement.style.cssText = 'width:100%;height:100%;display:block;'; el.appendChild(r.domElement);
-    const cam = new T.PerspectiveCamera(36, 1, 0.1, 100);
-    const fit = () => { const w = el.clientWidth || 1, h = el.clientHeight || 1; r.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); };
-    const ro = new ResizeObserver(() => { fit(); if (reduced) redraw(); }); ro.observe(el); fit();
-    return { r, cam, scene: new T.Scene(), ro };
-  };
-  let s = 0xc10d; const rnd = () => (s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296;
+const MAX_POINTS = 6000;
+const CYAN = new T.Color('#67E8F9');
+const AMBER = new T.Color('#F59E0B');
 
-  const A = mk(cloudEl);
-  const H = 11000, B = 4812, NB = 600, tot = H + B + NB;
-  const p = new Float32Array(tot * 3), bot = new Float32Array(tot), rr = new Float32Array(tot);
-  let k = 0;
-  for (let c = 0; c < 550; c++) {
-    const a = rnd() * Math.PI * 2, d = Math.sqrt(rnd()) * 3.2, cx = Math.cos(a) * d, cz = Math.sin(a) * d;
-    for (let j = 0; j < 20 && k < H; j++, k++) { p[k * 3] = cx + (rnd() - 0.5) * 0.18; p[k * 3 + 1] = rnd() * 0.12 * (1 + rnd()); p[k * 3 + 2] = cz + (rnd() - 0.5) * 0.18; rr[k] = rnd(); }
-  }
-  const spikes = [[1.3, -0.6, B, 2.8], [-1.6, 1.1, NB * 0.6, 0.9], [-0.4, -2.1, NB * 0.4, 0.6]];
-  for (const [x, z, n, hgt] of spikes) for (let j = 0; j < n; j++, k++) { const a = rnd() * 6.283, d = rnd() * 0.09; p[k * 3] = x + Math.cos(a) * d; p[k * 3 + 1] = Math.pow(rnd(), 0.8) * hgt; p[k * 3 + 2] = z + Math.sin(a) * d; bot[k] = 1; rr[k] = rnd(); }
-  const g = new T.BufferGeometry();
-  g.setAttribute('position', new T.BufferAttribute(p.subarray(0, k * 3), 3));
-  g.setAttribute('aBot', new T.BufferAttribute(bot.subarray(0, k), 1));
-  g.setAttribute('aR', new T.BufferAttribute(rr.subarray(0, k), 1));
-  const uc = { uCap: { value: getCap() ? 1 : 0 }, uPR: { value: A.r.getPixelRatio() } };
-  const m = new T.ShaderMaterial({
-    uniforms: uc, transparent: true, depthWrite: false, blending: T.AdditiveBlending,
-    vertexShader: `attribute float aBot; attribute float aR; uniform float uCap, uPR; varying vec3 vC;
-      void main(){ vec3 q = position; q.y *= mix(1.0, 0.06, uCap * aBot);
-        vC = aBot > 0.5 ? mix(vec3(0.96,0.62,0.05)*0.55, vec3(0.96,0.62,0.05)*0.25, uCap) : vec3(0.13,0.83,0.93) * (0.6 + 0.3 * aR);
-        vec4 mv = modelViewMatrix * vec4(q,1.0); gl_PointSize = (aBot > 0.5 ? 2.6 : 2.8) * uPR * 7.0 / -mv.z; gl_Position = projectionMatrix * mv; }`,
-    fragmentShader: `varying vec3 vC; void main(){ float r = length(gl_PointCoord-0.5); if(r>0.5) discard; float k = smoothstep(0.5,0.0,r); gl_FragColor = vec4(vC*k*k, k); }`
-  });
-  A.scene.add(new T.Points(g, m));
-  A.scene.add(new T.PolarGridHelper(3.6, 12, 6, 64, 0x2a2540, 0x1a1828));
+function safeCount(value) {
+  return Number.isSafeInteger(value) ? Math.max(0, value) : 0;
+}
 
-  const Bn = mk(arenaEl);
-  const rings = 10, rad = [], cnt = [];
-  let sum = 0; for (let i = 0; i < rings; i++) { rad.push(1.3 + i * 0.22); sum += rad[i]; }
-  let acc = 0; for (let i = 0; i < rings; i++) { const c = i === rings - 1 ? 500 - acc : Math.round(500 * rad[i] / sum); cnt.push(c); acc += c; }
-  const inst = new T.InstancedMesh(new T.PlaneGeometry(0.13, 0.15), new T.MeshBasicMaterial({ color: 0xffffff, side: T.DoubleSide, transparent: true, blending: T.AdditiveBlending, depthWrite: false }), 500);
-  const dmy = new T.Object3D(), dark = new T.Color('#1d1b2c'), amber = new T.Color('#F59E0B'), hot = new T.Color('#FFF4DC');
-  let idx = 0;
-  for (let i = 0; i < rings; i++) {
-    const y = i * 0.17, gap = 0.5;
-    for (let j = 0; j < cnt[i]; j++, idx++) {
-      const a = gap / 2 + (j / cnt[i]) * (Math.PI * 2 - gap);
-      dmy.position.set(Math.cos(a) * rad[i], y, Math.sin(a) * rad[i]);
-      dmy.lookAt(0, y + rad[i] * 0.8, 0); dmy.updateMatrix();
-      inst.setMatrixAt(idx, dmy.matrix); inst.setColorAt(idx, dark);
-    }
+function scaledWorld(input = {}) {
+  const honest = safeCount(input.honest);
+  const bots = safeCount(input.bots);
+  const seats = safeCount(input.seats);
+  const unitSize = Math.max(1, Math.ceil(Math.max(honest + bots, seats) / MAX_POINTS));
+  const entryPoints = Math.min(MAX_POINTS, Math.ceil((honest + bots) / unitSize));
+  const exact = [honest / unitSize, bots / unitSize];
+  const points = exact.map(Math.floor);
+  let remaining = entryPoints - points[0] - points[1];
+  if (remaining > 0) {
+    const order = [0, 1].sort((a, b) => (exact[b] - points[b]) - (exact[a] - points[a]) || a - b);
+    for (let index = 0; index < remaining; index++) points[order[index % order.length]]++;
   }
-  Bn.scene.add(inst);
-  for (let i = 0; i < rings; i += 3) {
-    const pts = []; for (let j = 0; j <= 96; j++) { const a = j / 96 * Math.PI * 2; pts.push(new T.Vector3(Math.cos(a) * (rad[i] - 0.12), i * 0.17 - 0.02, Math.sin(a) * (rad[i] - 0.12))); }
-    Bn.scene.add(new T.Line(new T.BufferGeometry().setFromPoints(pts), new T.LineBasicMaterial({ color: 0x2a2540 })));
-  }
-  const stage = new T.LineSegments(new T.EdgesGeometry(new T.PlaneGeometry(0.9, 0.5)), new T.LineBasicMaterial({ color: 0x5b4b8a }));
-  stage.rotation.x = -Math.PI / 2; stage.position.set(0.4, 0, 0); Bn.scene.add(stage);
-  const order = Array.from({ length: 500 }, (_, i) => i);
-  for (let i = 499; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
-  const claimT = new Float32Array(500).fill(-1);
-
-  let t = 0, last = performance.now(), raf = 0, cap = uc.uCap.value, claimed = 0, cycle = 0, lastRep = -1;
-  const C = new T.Color();
-  function redraw() { uc.uCap.value = getCap() ? 1 : 0; A.r.render(A.scene, A.cam); Bn.r.render(Bn.scene, Bn.cam); }
-  const frame = now => {
-    const dt = Math.min(0.05, (now - last) / 1000); last = now; t += dt;
-    cap += ((getCap() ? 1 : 0) - cap) * (1 - Math.exp(-dt * 6)); uc.uCap.value = cap;
-    const oa = t * 0.07;
-    const ad = 8 * Math.max(1, 1.2 / A.cam.aspect);
-    A.cam.position.set(Math.cos(oa) * ad, ad * 0.52, Math.sin(oa) * ad); A.cam.lookAt(0, 0.7, 0);
-    const bd = 8.8 * Math.max(1, 1.45 / Bn.cam.aspect);
-    Bn.cam.position.set(Math.cos(-oa * 0.8) * bd, bd * 0.64, Math.sin(-oa * 0.8) * bd); Bn.cam.lookAt(0, 0.5, 0);
-    cycle += dt;
-    const target = Math.min(500, Math.floor(500 * (1 - Math.pow(1 - Math.min(1, cycle / 50), 1.6))));
-    while (claimed < target) { claimT[order[claimed]] = t; claimed++; }
-    if (cycle > 58) { cycle = 0; claimed = 0; claimT.fill(-1); }
-    for (let i = 0; i < 500; i++) {
-      if (claimT[i] < 0) C.copy(dark); else { const f = Math.min(1, (t - claimT[i]) / 0.6); C.copy(hot).lerp(amber, f).multiplyScalar(0.9 + 0.6 * (1 - f)); }
-      inst.setColorAt(i, C);
-    }
-    inst.instanceColor.needsUpdate = true;
-    if (claimed !== lastRep && Math.floor(t * 4) !== Math.floor((t - dt) * 4)) { lastRep = claimed; onClaimed(claimed); }
-    A.r.render(A.scene, A.cam); Bn.r.render(Bn.scene, Bn.cam);
-    raf = requestAnimationFrame(frame);
-  };
-  if (reduced) {
-    A.cam.position.set(6, 4.2, 5); A.cam.lookAt(0, 0.7, 0); Bn.cam.position.set(6.6, 5.6, 5.4); Bn.cam.lookAt(0, 0.5, 0);
-    for (let i = 0; i < 312; i++) inst.setColorAt(order[i], amber);
-    onClaimed(312); redraw();
-  } else raf = requestAnimationFrame(frame);
   return {
+    honest,
+    bots,
+    seats,
+    unitSize,
+    honestPoints: points[0],
+    botPoints: points[1],
+    seatPoints: Math.min(MAX_POINTS, Math.ceil(seats / unitSize))
+  };
+}
+
+function setup(el) {
+  const renderer = new T.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setClearColor(0, 0);
+  renderer.domElement.style.cssText = 'width:100%;height:100%;display:block;';
+  el.appendChild(renderer.domElement);
+  const scene = new T.Scene();
+  const camera = new T.PerspectiveCamera(36, 1, 0.1, 100);
+  return { renderer, scene, camera };
+}
+
+function fit(surface, el, targetY) {
+  const width = el.clientWidth || 1;
+  const height = el.clientHeight || 1;
+  surface.renderer.setSize(width, height, false);
+  surface.camera.aspect = width / height;
+  surface.camera.position.set(7.2 * Math.max(1, 1.2 / surface.camera.aspect), 5.1, 7.2);
+  surface.camera.lookAt(0, targetY, 0);
+  surface.camera.updateProjectionMatrix();
+}
+
+function addEntryCloud(scene, world) {
+  const count = world.honestPoints + world.botPoints;
+  if (!count) return null;
+  const positions = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+  const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+  for (let index = 0; index < count; index++) {
+    const bot = index >= world.honestPoints;
+    const localIndex = bot ? index - world.honestPoints : index;
+    const localCount = bot ? world.botPoints : world.honestPoints;
+    const y = 1 - 2 * (localIndex + 0.5) / Math.max(1, localCount);
+    const ring = Math.sqrt(1 - y * y);
+    const angle = goldenAngle * localIndex;
+    const radius = bot ? 2.75 : 3.5;
+    const offset = bot ? 0.9 : 0;
+    positions[index * 3] = Math.cos(angle) * ring * radius + offset;
+    positions[index * 3 + 1] = y * radius * 0.48 + (bot ? 0.25 : 0);
+    positions[index * 3 + 2] = Math.sin(angle) * ring * radius - offset * 0.6;
+    const color = bot ? AMBER : CYAN;
+    colors[index * 3] = color.r;
+    colors[index * 3 + 1] = color.g;
+    colors[index * 3 + 2] = color.b;
+  }
+
+  const geometry = new T.BufferGeometry();
+  geometry.setAttribute('position', new T.BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new T.BufferAttribute(colors, 3));
+  const material = new T.PointsMaterial({
+    size: Math.max(1.3, 4.2 / Math.sqrt(Math.max(1, count / MAX_POINTS))),
+    sizeAttenuation: true,
+    vertexColors: true,
+    transparent: true,
+    depthWrite: false,
+    blending: T.AdditiveBlending
+  });
+  const points = new T.Points(geometry, material);
+  scene.add(points);
+  return points;
+}
+
+function addArena(scene, world) {
+  if (!world.seatPoints) return null;
+  const mesh = new T.InstancedMesh(
+    new T.PlaneGeometry(0.12, 0.14),
+    new T.MeshBasicMaterial({ color: 0xffffff, side: T.DoubleSide, transparent: true, depthWrite: false }),
+    world.seatPoints
+  );
+  const helper = new T.Object3D();
+  const color = new T.Color();
+  const rows = Math.max(1, Math.ceil(Math.sqrt(world.seatPoints / 1.5)));
+  let index = 0;
+  for (let row = 0; row < rows && index < world.seatPoints; row++) {
+    const radius = 1.4 + row * 0.15;
+    const seatsInRow = Math.min(world.seatPoints - index, Math.max(1, Math.round(100 * radius / 1.4)));
+    for (let column = 0; column < seatsInRow; column++, index++) {
+      const angle = 0.24 + (column + 0.5) / seatsInRow * (Math.PI * 2 - 0.48);
+      helper.position.set(Math.cos(angle) * radius, row * 0.1, Math.sin(angle) * radius);
+      helper.lookAt(0, row * 0.1 + 1.2, 0);
+      helper.updateMatrix();
+      mesh.setMatrixAt(index, helper.matrix);
+      mesh.setColorAt(index, color.copy(CYAN).multiplyScalar(0.72 + (index % 5) * 0.05));
+    }
+  }
+  mesh.instanceMatrix.needsUpdate = true;
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  scene.add(mesh);
+  return mesh;
+}
+
+/** Decorative scenes sized from the published lottery results. */
+export function createJudgeScenes(cloudEl, arenaEl, { reduced = false, data = {} } = {}) {
+  const cloud = setup(cloudEl);
+  const arena = setup(arenaEl);
+  const cloudGrid = new T.PolarGridHelper(3.8, 12, 6, 64, 0x2a2540, 0x1a1828);
+  cloudGrid.rotation.x = Math.PI / 2;
+  cloud.scene.add(cloudGrid);
+
+  const stage = new T.LineSegments(
+    new T.EdgesGeometry(new T.BoxGeometry(0.9, 0.08, 0.42)),
+    new T.LineBasicMaterial({ color: 0x5b4b8a })
+  );
+  stage.position.set(0, 0.04, -1.8);
+  arena.scene.add(stage);
+  for (let radius = 1.4; radius <= 2.7; radius += 0.45) {
+    const points = [];
+    for (let index = 0; index <= 96; index++) {
+      const angle = index / 96 * Math.PI * 2;
+      points.push(new T.Vector3(Math.cos(angle) * radius, Math.floor(radius * 10) * 0.015, Math.sin(angle) * radius));
+    }
+    const line = new T.LineLoop(new T.BufferGeometry().setFromPoints(points), new T.LineBasicMaterial({ color: 0x2a2540 }));
+    arena.scene.add(line);
+  }
+
+  let cloudPoints = null;
+  let arenaMesh = null;
+  let world = scaledWorld(data);
+  const clearDataMeshes = () => {
+    for (const [surface, object] of [[cloud, cloudPoints], [arena, arenaMesh]]) {
+      if (!object) continue;
+      surface.scene.remove(object);
+      object.geometry.dispose();
+      if (Array.isArray(object.material)) object.material.forEach(material => material.dispose());
+      else object.material.dispose();
+    }
+  };
+  const rebuild = next => {
+    clearDataMeshes();
+    world = scaledWorld(next);
+    cloudPoints = addEntryCloud(cloud.scene, world);
+    arenaMesh = addArena(arena.scene, world);
+    redraw();
+  };
+  let angle = 0;
+  let frame = 0;
+  let last = performance.now();
+  let active = true;
+  const redraw = () => {
+    cloud.renderer.render(cloud.scene, cloud.camera);
+    arena.renderer.render(arena.scene, arena.camera);
+  };
+  fit(cloud, cloudEl, 0);
+  fit(arena, arenaEl, 0.35);
+  const observers = [
+    new ResizeObserver(() => { fit(cloud, cloudEl, 0); redraw(); }),
+    new ResizeObserver(() => { fit(arena, arenaEl, 0.35); redraw(); })
+  ];
+  observers[0].observe(cloudEl);
+  observers[1].observe(arenaEl);
+
+  const animate = now => {
+    if (!active) return;
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    angle += dt * 0.035;
+    if (cloudPoints) cloudPoints.rotation.y = angle;
+    if (arenaMesh) arenaMesh.rotation.y = angle * 0.7;
+    redraw();
+    frame = requestAnimationFrame(animate);
+  };
+  rebuild(data);
+  if (!reduced) frame = requestAnimationFrame(animate);
+
+  return {
+    setData(next) { rebuild(next); },
     redraw,
-    dispose() { cancelAnimationFrame(raf); [A, Bn].forEach(x => { x.ro.disconnect(); x.r.dispose(); x.r.domElement.remove(); }); g.dispose(); m.dispose(); }
+    dispose() {
+      active = false;
+      cancelAnimationFrame(frame);
+      observers.forEach(observer => observer.disconnect());
+      clearDataMeshes();
+      for (const surface of [cloud, arena]) {
+        surface.scene.traverse(object => {
+          object.geometry?.dispose();
+          if (Array.isArray(object.material)) object.material.forEach(material => material.dispose());
+          else object.material?.dispose();
+        });
+        surface.renderer.dispose();
+        surface.renderer.domElement.remove();
+      }
+    }
   };
 }

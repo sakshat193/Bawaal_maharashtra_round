@@ -1,9 +1,14 @@
 import { http, HttpResponse } from 'msw';
 import { setupWorker } from 'msw/browser';
 import { applyCreatedReceipt, createEntryResponse } from './mockEntries.js';
-import { initialScenario } from './scenarios.js';
+import { initialScenario, MOCK_SCENARIOS } from './scenarios.js';
 
-const jsonFiles = import.meta.glob('../../../contracts/fixtures/*.json', {
+export { MOCK_SCENARIOS };
+
+const jsonFiles = import.meta.glob([
+  '../../../contracts/fixtures/*.json',
+  '!../../../contracts/fixtures/results.json'
+], {
   eager: true,
   import: 'default'
 });
@@ -18,22 +23,6 @@ const byName = files => Object.fromEntries(
 );
 const json = byName(jsonFiles);
 const ndjson = byName(ndjsonFiles);
-
-export const MOCK_SCENARIOS = Object.freeze({
-  none: { drop: 'open', me: 'none' },
-  registered: { drop: 'open', me: 'registered' },
-  sealed: { drop: 'sealed', me: 'registered' },
-  excluded: { drop: 'sealed', me: 'excluded' },
-  waitlisted: { drop: 'drawn', me: 'waitlisted' },
-  offered: { drop: 'drawn', me: 'offered' },
-  payment_pending: { drop: 'drawn', me: 'payment_pending' },
-  confirmed: { drop: 'drawn', me: 'confirmed' },
-  expired: { drop: 'drawn', me: 'expired' },
-  declined: { drop: 'drawn', me: 'declined' },
-  payment_failed: { drop: 'drawn', me: 'payment_failed' },
-  not_selected: { drop: 'settled', me: 'not_selected' },
-  scheduled: { drop: 'scheduled', me: 'none' }
-});
 
 export const ERROR_FIXTURE_NAMES = Object.keys(json)
   .filter(name => json[name]?.error)
