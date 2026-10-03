@@ -1,0 +1,8 @@
+{
+  "provider": "razorpay",
+  "key_id": "rzp_test_fixture",
+  "provider_order_id": "order_fixture",
+  "amount_paise": 900000,
+  "currency": "INR",
+  "pay_deadline": "2026-10-04T13:18:30Z"
+}

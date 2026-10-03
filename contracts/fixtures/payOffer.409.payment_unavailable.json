@@ -1,0 +1,4 @@
+{
+  "error": "payment_unavailable",
+  "message": "Razorpay could not complete the request."
+}

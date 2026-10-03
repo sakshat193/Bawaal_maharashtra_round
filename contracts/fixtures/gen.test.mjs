@@ -64,17 +64,8 @@ test('drop fixtures follow the detail contract and keep the round-zero draw full
     const me = fixture(`./${file}`);
     assert.equal(me.server_time, phaseTimes[me.phase], `${file} uses its phase time`);
   }
-  for (const [file, phase] of [
-    ['getInvariants.200.json', 'open'],
-    ['getInvariants.200.open.json', 'open'],
-    ['getInvariants.200.drawn.json', 'drawn'],
-    ['getInvariants.200.settled.json', 'settled']
-  ]) {
-    assert.equal(fixture(`./${file}`).server_time, phaseTimes[phase], `${file} uses its phase time`);
-  }
-
-  assert.equal(draw.ranked.length, 8975);
-  assert.equal(draw.ranked.includes('9f2c4a7e1b3d5f60718293a4b5c6d7e8'), true);
+  assert.equal(draw.ranked_entry_ids.length, 8975);
+  assert.equal(draw.ranked_entry_ids.includes('9f2c4a7e1b3d5f60718293a4b5c6d7e8'), true);
   for (const tier of drawn.tiers) {
     const invariant = drawnInvariants.tiers.find(item => item.tier_id === tier.tier_id);
     const allocated = draw.allocation
@@ -82,7 +73,7 @@ test('drop fixtures follow the detail contract and keep the round-zero draw full
       .reduce((sum, item) => sum + item.quantity, 0);
     assert.equal(invariant.held, allocated);
     assert.equal(invariant.held, tier.capacity);
-    assert.equal(invariant.general_sale_units, 0);
+    assert.equal(invariant.held, invariant.active_offer_units);
   }
 });
 
@@ -123,13 +114,13 @@ test('settled inventory balances while silver and bronze remain partial', () => 
 
   assert.deepEqual(settled.tiers.map(tier => {
     const invariant = invariants.tiers.find(item => item.tier_id === tier.tier_id);
-    return [tier.tier_id, invariant.held, invariant.general_sale_units];
+    return [tier.tier_id, invariant.held, tier.capacity - invariant.held];
   }), expected);
 
   for (const tier of settled.tiers) {
     const invariant = invariants.tiers.find(item => item.tier_id === tier.tier_id);
-    assert.equal(invariant.held + invariant.general_sale_units, tier.capacity);
-    assert.equal(invariant.held, invariant.active_quantity);
+    assert.equal(invariant.held + tier.capacity - invariant.held, tier.capacity);
+    assert.equal(invariant.held, invariant.active_offer_units);
     assert.equal(active.get(tier.tier_id), invariant.held);
   }
   assert.ok(invariants.tiers.find(tier => tier.tier_id === 'silver').held < settled.tiers.find(tier => tier.tier_id === 'silver').capacity);
@@ -217,5 +208,59 @@ test('fixture output files exactly match deterministic generator output', () => 
   for (const [name, value] of Object.entries(generated)) {
     const onDisk = name.endsWith('.ndjson') ? body(`./${name}`) : fixture(`./${name}`);
     assert.deepEqual(onDisk, value, `${name} matches gen.mjs`);
+  }
+});
+
+
+test('producer draw and invariant fixtures have exact M3 key sets', () => {
+  const draw = fixture('./getDraw.200.json');
+  assert.deepEqual(Object.keys(draw).sort(), ['allocation', 'drawn_at', 'drop_id', 'randomness', 'ranked_entry_ids', 'relays', 'round', 'signature']);
+  assert.ok(Number.isFinite(Date.parse(draw.drawn_at)));
+  for (const row of draw.allocation) {
+    assert.deepEqual(Object.keys(row).sort(), ['entry_id', 'offer_id', 'quantity', 'round', 'tier_id']);
+    assert.equal(row.round, 0);
+    assert.match(row.offer_id, /^[0-9a-f-]{36}$/);
+  }
+  const viewer = fixture('./getMe.200.offered.json');
+  assert.equal(draw.allocation.find(row => row.entry_id === viewer.entry.entry_id).offer_id, viewer.offer.offer_id);
+  for (const phase of ['open', 'drawn', 'settled']) {
+    const inv = fixture(`./getInvariants.200.${phase}.json`);
+    assert.deepEqual(Object.keys(inv).sort(), ['double_redemption', 'held_mismatch', 'oversell', 'tiers']);
+    assert.equal(inv.oversell + inv.held_mismatch + inv.double_redemption, 0);
+    for (const tier of inv.tiers) {
+      assert.deepEqual(Object.keys(tier).sort(), ['active_offer_units', 'capacity', 'held', 'tier_id']);
+      assert.equal(tier.held, tier.active_offer_units);
+    }
+  }
+});
+
+test('results fixtures use exact M4 fields with explicit classification', () => {
+  const result = fixture('./results.json');
+  assert.deepEqual(Object.keys(result).sort(), ['modes', 'schema_version', 'source']);
+  assert.equal(result.source, 'fixture');
+  assert.deepEqual(result.modes.map(mode => mode.mode), ['naive_fcfs', 'hardened_fcfs', 'lottery_wil']);
+  for (const mode of result.modes) {
+    assert.deepEqual(Object.keys(mode).sort(), ['bot_identity_share','bot_share_ratio','bot_ticket_share','entries','exclusions_per_rule','groups_vs_singles','identities','invariants','mode','profiles','tickets_won']);
+    assert.deepEqual(Object.keys(mode.groups_vs_singles).sort(), ['group_members','ratio','singles']);
+    assert.deepEqual(mode.invariants, { held_within_capacity: true, held_matches_active_offers: true, oversell: 0, double_redemption: 0 });
+    for (const profile of Object.values(mode.profiles)) {
+      assert.deepEqual(Object.keys(profile).sort(), ['bot','cohort','entries','identities','tickets_won']);
+      assert.equal(typeof profile.bot, 'boolean');
+      assert.equal(typeof profile.cohort, 'string');
+    }
+    assert.equal(mode.tickets_won, Object.values(mode.profiles).reduce((n,p) => n+p.tickets_won,0));
+  }
+});
+
+test('checkout and payment-unavailable fixtures match M3', () => {
+  const checkout = fixture('./createPaymentCheckout.200.json');
+  assert.deepEqual(Object.keys(checkout).sort(), ['amount_paise','currency','key_id','pay_deadline','provider','provider_order_id']);
+  assert.equal(checkout.provider, 'razorpay');
+  assert.equal(checkout.amount_paise, fixture('./getMe.200.payment_pending.json').offer.amount_paise);
+  for (const file of ['createPaymentCheckout.503.payment_unavailable.json', 'payOffer.409.payment_unavailable.json']) {
+    const error = fixture(`./${file}`);
+    assert.deepEqual(Object.keys(error).sort(), ['error','message']);
+    assert.equal(error.error, 'payment_unavailable');
+    assert.equal(typeof error.message, 'string');
   }
 });

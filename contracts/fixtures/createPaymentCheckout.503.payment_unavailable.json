@@ -1,0 +1,4 @@
+{
+  "error": "payment_unavailable",
+  "message": "Razorpay Test Mode is not configured."
+}

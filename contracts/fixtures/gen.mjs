@@ -156,7 +156,10 @@ function buildFixtures() {
   const allocation = [];
   for (const entry of rankedEntries) {
     if (entry.quantity <= remaining[entry.tier_id]) {
-      allocation.push({ entry_id: entry.entry_id, tier_id: entry.tier_id, quantity: entry.quantity });
+      const offerHash = sha256(`offer:${entry.entry_id}`);
+      const offer_id = entry.entry_id === WORLD.viewer.entry_id ? WORLD.viewer.offer_id
+        : `${offerHash.slice(0,8)}-${offerHash.slice(8,12)}-${offerHash.slice(12,16)}-${offerHash.slice(16,20)}-${offerHash.slice(20,32)}`;
+      allocation.push({ entry_id: entry.entry_id, tier_id: entry.tier_id, quantity: entry.quantity, round: 0, offer_id });
       remaining[entry.tier_id] -= entry.quantity;
     }
   }
@@ -243,11 +246,12 @@ function buildFixtures() {
 
   const draw = {
     drop_id: WORLD.drop_id,
-    round: 0,
+    round: WORLD.drand_round,
+    drawn_at: PHASE_SERVER_TIME.drawn,
     signature,
     randomness,
-    relays: [{ url: 'https://api.drand.sh', signature: 'ZGVtby1yZWxheS1zaWc=' }],
-    ranked,
+    relays: ['api.drand.sh', 'drand.cloudflare.com'],
+    ranked_entry_ids: ranked,
     allocation
   };
   const invariants = phaseDrop => ({
@@ -258,13 +262,13 @@ function buildFixtures() {
       return {
         tier_id: tier.tier_id,
         held: tierHeld,
-        active_quantity: tierHeld,
-        capacity: tier.capacity,
-        general_sale_units: phaseDrop.phase === 'settled' ? tier.capacity - tierHeld : 0
+        active_offer_units: tierHeld,
+        capacity: tier.capacity
       };
     }),
-    entries_with_multiple_offers: 0,
-    server_time: PHASE_SERVER_TIME[phaseDrop.phase]
+    oversell: 0,
+    held_mismatch: 0,
+    double_redemption: 0
   });
   const activeOutcomeIds = new Set();
   for (const tier of WORLD.tiers) {
@@ -305,15 +309,29 @@ function buildFixtures() {
   });
 
   const results = {
-    generated_at: WORLD.server_time,
-    modes: Object.fromEntries(['naive_fcfs', 'hardened_fcfs', 'lottery'].map((mode, index) => [mode, {
-      profiles: {
-        honest_singles: { bot: false, identities: 180, entries: 200, tickets: [160, 178, 180][index] },
-        speed_bots: { bot: true, group: false, identities: 40, entries: 180, tickets: [95, 63, 20][index] },
-        honest_groups: { bot: false, group: true, identities: 20, entries: 40, tickets: [0, 9, 70][index] }
-      },
-      exclusions_by_rule: index === 2 ? WORLD.exclusions : {}
-    }]))
+    schema_version: 1,
+    source: 'fixture',
+    modes: ['naive_fcfs', 'hardened_fcfs', 'lottery_wil'].map((mode, index) => {
+      const profiles = {
+        honest_singles: { bot: false, cohort: 'singles', identities: 180, entries: 200, tickets_won: [160, 178, 180][index] },
+        speed_bots: { bot: true, cohort: 'bots', identities: 40, entries: 180, tickets_won: [95, 63, 20][index] },
+        honest_groups: { bot: false, cohort: 'group_members', identities: 20, entries: 40, tickets_won: [0, 9, 70][index] }
+      };
+      const sum = field => Object.values(profiles).reduce((n, p) => n + p[field], 0);
+      const tickets_won = sum('tickets_won');
+      const identities = sum('identities');
+      const bot_ticket_share = profiles.speed_bots.tickets_won / tickets_won;
+      const bot_identity_share = profiles.speed_bots.identities / identities;
+      const group_members = profiles.honest_groups.tickets_won;
+      const singles = profiles.honest_singles.tickets_won;
+      return {
+        mode, entries: sum('entries'), identities, tickets_won, profiles,
+        bot_ticket_share, bot_identity_share, bot_share_ratio: bot_ticket_share / bot_identity_share,
+        groups_vs_singles: { group_members, singles, ratio: singles ? group_members / singles : 0 },
+        exclusions_per_rule: index === 2 ? WORLD.exclusions : {},
+        invariants: { held_within_capacity: true, held_matches_active_offers: true, oversell: 0, double_redemption: 0 }
+      };
+    })
   };
 
   return {
@@ -352,6 +370,12 @@ function buildFixtures() {
     'getMe.200.declined.json': makeMe('drawn', 'declined', viewer.rank, null, null, { ...baseOffer, status: 'declined' }),
     'getMe.200.payment_failed.json': makeMe('drawn', 'payment_failed', viewer.rank, null, null, { ...baseOffer, status: 'payment_failed', pay_deadline: '2026-10-04T13:18:30Z' }),
     'redeemOffer.200.json': { offer_id: viewer.offer_id, order_id: '2d1f7d38-6f18-45e4-a0d1-e9b3b71ce102', status: 'payment_pending', pay_deadline: '2026-10-04T13:18:30Z' },
+    'createPaymentCheckout.200.json': {
+      provider: 'razorpay', key_id: 'rzp_test_fixture', provider_order_id: 'order_fixture',
+      amount_paise: baseOffer.amount_paise, currency: 'INR', pay_deadline: '2026-10-04T13:18:30Z'
+    },
+    'createPaymentCheckout.503.payment_unavailable.json': { error: 'payment_unavailable', message: 'Razorpay Test Mode is not configured.' },
+    'payOffer.409.payment_unavailable.json': { error: 'payment_unavailable', message: 'Razorpay could not complete the request.' },
     'payOffer.200.confirmed.json': { status: 'confirmed' },
     'payOffer.200.payment_failed.json': { status: 'payment_failed' },
     'declineOffer.200.json': { status: 'declined' },
