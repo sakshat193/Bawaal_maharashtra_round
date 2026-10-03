@@ -63,7 +63,9 @@ export default function DropDetail({ drop, invariants, entering, onEnter, onClos
             {ordered.map(tier => {
               const left = availability(tier);
               const selectedTier = tier.tier_id === selected?.tier_id;
-              const generalSale = inventory.find(row => row.tier_id === tier.tier_id)?.general_sale_units;
+              const row = inventory.find(row => row.tier_id === tier.tier_id);
+              // Valid only while confirmed offers remain included in held.
+              const generalSale = row ? row.general_sale_units ?? (row.capacity - row.held) : null;
               return (
                 <button
                   key={tier.tier_id}

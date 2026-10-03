@@ -18,6 +18,11 @@ function DropCard({ drop, saved, onToggleSave }) {
     return sum + (row?.held || 0);
   }, 0);
 
+  // Valid only while confirmed offers remain included in held.
+  const firstCome = current.phase === 'settled' && inventory.data?.tiers?.length
+    ? inventory.data.tiers.reduce((sum,row) => sum + (row.general_sale_units ?? (row.capacity - row.held)),0)
+    : null;
+
   return (
     <article style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ position: 'relative' }}>
@@ -52,6 +57,7 @@ function DropCard({ drop, saved, onToggleSave }) {
           <span style={{ fontSize: 12, color: 'var(--ink4)' }}>{new Intl.NumberFormat('en-IN').format(held)} held of {new Intl.NumberFormat('en-IN').format(capacity)}</span>
         </div>
       )}
+      {firstCome !== null && <span className="c-sub">{firstCome.toLocaleString('en-IN')} first-come tickets</span>}
       {detail.error && <span role="status" className="c-sub">{messageForError(detail.error)}</span>}
     </article>
   );
