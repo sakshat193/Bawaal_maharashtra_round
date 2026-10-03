@@ -1,0 +1,108 @@
+{
+  "config": {
+    "drop": {
+      "drop_id": "11111111-1111-4111-8111-111111111111",
+      "name": "Ganesh Festival",
+      "venue": "Pune Central",
+      "starts_at": "2026-11-01T18:00:00Z",
+      "opens_at": "2026-10-04T17:30:00+05:30",
+      "closes_at": "2026-10-04T17:45:00+05:30",
+      "allocation_mode": "lottery_wil",
+      "pow_required": true,
+      "turnstile_required": true,
+      "pow_bits": 18,
+      "pow_k": 16,
+      "pow_memory_kib": 2048,
+      "max_quantity": 4,
+      "offer_ttl_s": 600,
+      "pay_deadline_s": 300,
+      "max_promotion_rounds": 6,
+      "sybil_rules": [
+        {
+          "id": "device",
+          "kind": "max_per_device",
+          "limit": 2
+        }
+      ],
+      "drand_chain": "52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971",
+      "drand_round": 4321,
+      "phase": "drawn",
+      "config_hash": "ignored-by-canonical"
+    },
+    "tiers": [
+      {
+        "tier_id": "silver",
+        "name": "Silver",
+        "price_paise": 450000,
+        "capacity": 12,
+        "held": 5,
+        "general_sale_units": 1
+      },
+      {
+        "tier_id": "gold",
+        "name": "Gold",
+        "price_paise": 900000,
+        "capacity": 8,
+        "held": 2,
+        "general_sale_units": 0
+      }
+    ],
+    "bytes_utf8": "{\"allocation_mode\":\"lottery_wil\",\"closes_at\":\"2026-10-04T12:15:00Z\",\"drand_chain\":\"52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971\",\"drand_round\":4321,\"drop_id\":\"11111111-1111-4111-8111-111111111111\",\"max_promotion_rounds\":6,\"max_quantity\":4,\"name\":\"Ganesh Festival\",\"offer_ttl_s\":600,\"opens_at\":\"2026-10-04T12:00:00Z\",\"pay_deadline_s\":300,\"pow_bits\":18,\"pow_k\":16,\"pow_memory_kib\":2048,\"pow_required\":true,\"starts_at\":\"2026-11-01T18:00:00Z\",\"sybil_rules\":[{\"id\":\"device\",\"kind\":\"max_per_device\",\"limit\":2}],\"tiers\":[{\"capacity\":8,\"name\":\"Gold\",\"price_paise\":900000,\"tier_id\":\"gold\"},{\"capacity\":12,\"name\":\"Silver\",\"price_paise\":450000,\"tier_id\":\"silver\"}],\"turnstile_required\":true,\"venue\":\"Pune Central\"}",
+    "sha256": "ec499e63b2e7b460b3036058f98e190131427a3a765dd64d2cc8ea6fa1cd9717"
+  },
+  "exclusions": {
+    "rows": [
+      {
+        "entry_id": "00000000000000000000000000000003",
+        "reason": "sybil:device"
+      },
+      {
+        "entry_id": "00000000000000000000000000000002",
+        "reason": "pow_invalid"
+      }
+    ],
+    "bytes_utf8": "{\"entry_id\":\"00000000000000000000000000000002\",\"reason\":\"pow_invalid\"}\n{\"entry_id\":\"00000000000000000000000000000003\",\"reason\":\"sybil:device\"}\n",
+    "sha256": "c8ab88fdc09d74c0b37c302311e28f0cb5b18c56ff67d6623fe6c6f4b2e933e3"
+  },
+  "snapshot": {
+    "header": {
+      "config_hash": "ec499e63b2e7b460b3036058f98e190131427a3a765dd64d2cc8ea6fa1cd9717",
+      "drand_round": 4321,
+      "drop_id": "11111111-1111-4111-8111-111111111111",
+      "exclusions_hash": "c8ab88fdc09d74c0b37c302311e28f0cb5b18c56ff67d6623fe6c6f4b2e933e3"
+    },
+    "entries": [
+      {
+        "entry_id": "00000000000000000000000000000004",
+        "tier_id": "silver",
+        "quantity": 2,
+        "accepted_at": "2026-10-04T12:00:00.000004Z"
+      },
+      {
+        "entry_id": "00000000000000000000000000000001",
+        "tier_id": "gold",
+        "quantity": 1,
+        "accepted_at": "2026-10-04T12:00:00.000001Z"
+      },
+      {
+        "entry_id": "00000000000000000000000000000002",
+        "tier_id": "silver",
+        "quantity": 1,
+        "accepted_at": "2026-10-04T12:00:00.000002Z"
+      }
+    ],
+    "bytes_utf8": "{\"config_hash\":\"ec499e63b2e7b460b3036058f98e190131427a3a765dd64d2cc8ea6fa1cd9717\",\"drand_round\":4321,\"drop_id\":\"11111111-1111-4111-8111-111111111111\",\"exclusions_hash\":\"c8ab88fdc09d74c0b37c302311e28f0cb5b18c56ff67d6623fe6c6f4b2e933e3\",\"version\":\"fairdrop-snapshot/2\"}\n{\"accepted_at\":\"2026-10-04T12:00:00.000001Z\",\"entry_id\":\"00000000000000000000000000000001\",\"quantity\":1,\"tier_id\":\"gold\"}\n{\"accepted_at\":\"2026-10-04T12:00:00.000002Z\",\"entry_id\":\"00000000000000000000000000000002\",\"quantity\":1,\"tier_id\":\"silver\"}\n{\"accepted_at\":\"2026-10-04T12:00:00.000004Z\",\"entry_id\":\"00000000000000000000000000000004\",\"quantity\":2,\"tier_id\":\"silver\"}\n",
+    "sha256": "444fe95b1f64d6ddd4b7472573df6be8d573b6ca96fc03499e51897a8d263d52"
+  },
+  "receipt": {
+    "receipt": {
+      "drop_id": "11111111-1111-4111-8111-111111111111",
+      "entry_id": "00000000000000000000000000000004",
+      "tier_id": "silver",
+      "quantity": 2,
+      "config_hash": "ec499e63b2e7b460b3036058f98e190131427a3a765dd64d2cc8ea6fa1cd9717",
+      "accepted_at": "2026-10-04T12:00:00.000004Z"
+    },
+    "bytes_utf8": "{\"accepted_at\":\"2026-10-04T12:00:00.000004Z\",\"config_hash\":\"ec499e63b2e7b460b3036058f98e190131427a3a765dd64d2cc8ea6fa1cd9717\",\"drop_id\":\"11111111-1111-4111-8111-111111111111\",\"entry_id\":\"00000000000000000000000000000004\",\"quantity\":2,\"tier_id\":\"silver\"}"
+  }
+}

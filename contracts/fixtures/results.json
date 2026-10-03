@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "source": "example",
+  "modes": [
+    {
+      "mode": "naive_fcfs",
+      "entries": 102,
+      "identities": 102,
+      "tickets_won": 80,
+      "profiles": {
+        "honest_singles": {"identities": 30, "entries": 30, "tickets_won": 10},
+        "honest_groups": {"identities": 30, "entries": 30, "tickets_won": 10},
+        "speed_bots": {"identities": 20, "entries": 20, "tickets_won": 20},
+        "broker": {"identities": 10, "entries": 10, "tickets_won": 40},
+        "sybil_cluster": {"identities": 6, "entries": 6, "tickets_won": 0},
+        "replay": {"identities": 1, "entries": 1, "tickets_won": 0},
+        "forged_redeem": {"identities": 1, "entries": 1, "tickets_won": 0},
+        "double_redeem": {"identities": 1, "entries": 1, "tickets_won": 0},
+        "late_payer": {"identities": 1, "entries": 1, "tickets_won": 0},
+        "payment_failer": {"identities": 1, "entries": 1, "tickets_won": 0},
+        "reconnect": {"identities": 1, "entries": 1, "tickets_won": 0}
+      },
+      "bot_ticket_share": 0.75,
+      "bot_identity_share": 0.3824,
+      "bot_share_ratio": 1.96,
+      "groups_vs_singles": {"group_members": 10, "singles": 10, "ratio": 1.0},
+      "exclusions_per_rule": {},
+      "invariants": {"held_within_capacity": true, "held_matches_active_offers": true, "oversell": 0, "double_redemption": 0}
+    },
+    {
+      "mode": "hardened_fcfs",
+      "entries": 102,
+      "identities": 102,
+      "tickets_won": 56,
+      "profiles": {
+        "honest_singles": {"identities": 30, "entries": 30, "tickets_won": 25},
+        "honest_groups": {"identities": 30, "entries": 30, "tickets_won": 25},
+        "speed_bots": {"identities": 20, "entries": 20, "tickets_won": 0},
+        "broker": {"identities": 10, "entries": 10, "tickets_won": 0},
+        "sybil_cluster": {"identities": 6, "entries": 6, "tickets_won": 0},
+        "replay": {"identities": 1, "entries": 1, "tickets_won": 1},
+        "forged_redeem": {"identities": 1, "entries": 1, "tickets_won": 1},
+        "double_redeem": {"identities": 1, "entries": 1, "tickets_won": 1},
+        "late_payer": {"identities": 1, "entries": 1, "tickets_won": 1},
+        "payment_failer": {"identities": 1, "entries": 1, "tickets_won": 1},
+        "reconnect": {"identities": 1, "entries": 1, "tickets_won": 1}
+      },
+      "bot_ticket_share": 0.0536,
+      "bot_identity_share": 0.3824,
+      "bot_share_ratio": 0.14,
+      "groups_vs_singles": {"group_members": 25, "singles": 25, "ratio": 1.0},
+      "exclusions_per_rule": {"sybil:device": 6},
+      "invariants": {"held_within_capacity": true, "held_matches_active_offers": true, "oversell": 0, "double_redemption": 0}
+    },
+    {
+      "mode": "lottery_wil",
+      "entries": 102,
+      "identities": 102,
+      "tickets_won": 58,
+      "profiles": {
+        "honest_singles": {"identities": 30, "entries": 30, "tickets_won": 22},
+        "honest_groups": {"identities": 30, "entries": 30, "tickets_won": 22},
+        "speed_bots": {"identities": 20, "entries": 20, "tickets_won": 3},
+        "broker": {"identities": 10, "entries": 10, "tickets_won": 5},
+        "sybil_cluster": {"identities": 6, "entries": 6, "tickets_won": 0},
+        "replay": {"identities": 1, "entries": 1, "tickets_won": 1},
+        "forged_redeem": {"identities": 1, "entries": 1, "tickets_won": 1},
+        "double_redeem": {"identities": 1, "entries": 1, "tickets_won": 1},
+        "late_payer": {"identities": 1, "entries": 1, "tickets_won": 1},
+        "payment_failer": {"identities": 1, "entries": 1, "tickets_won": 1},
+        "reconnect": {"identities": 1, "entries": 1, "tickets_won": 1}
+      },
+      "bot_ticket_share": 0.1897,
+      "bot_identity_share": 0.3824,
+      "bot_share_ratio": 0.496,
+      "groups_vs_singles": {"group_members": 22, "singles": 22, "ratio": 1.0},
+      "exclusions_per_rule": {"sybil:device": 6},
+      "invariants": {"held_within_capacity": true, "held_matches_active_offers": true, "oversell": 0, "double_redemption": 0}
+    }
+  ]
+}

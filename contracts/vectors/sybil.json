@@ -1,0 +1,219 @@
+{
+  "cases": [
+    {
+      "rules": [
+        {
+          "id": "device",
+          "kind": "max_per_device",
+          "limit": 2
+        },
+        {
+          "id": "payment",
+          "kind": "max_per_payment",
+          "limit": 2
+        },
+        {
+          "id": "fresh",
+          "kind": "min_account_age_s",
+          "value": 86400
+        }
+      ],
+      "opens_at": "2026-10-04T12:00:00Z",
+      "facts": [
+        {
+          "entry_id": "00000000000000000000000000000001",
+          "device_hash": "shared-device",
+          "payment_fingerprint": "p1",
+          "account_created_at": "2026-01-01T00:00:00Z"
+        },
+        {
+          "entry_id": "00000000000000000000000000000002",
+          "device_hash": "shared-device",
+          "payment_fingerprint": "p2",
+          "account_created_at": "2026-01-01T00:00:00Z"
+        },
+        {
+          "entry_id": "00000000000000000000000000000003",
+          "device_hash": "shared-device",
+          "payment_fingerprint": "p3",
+          "account_created_at": "2026-01-01T00:00:00Z"
+        },
+        {
+          "entry_id": "00000000000000000000000000000004",
+          "device_hash": "d4",
+          "payment_fingerprint": "same-at-limit",
+          "account_created_at": "2026-01-01T00:00:00Z"
+        },
+        {
+          "entry_id": "00000000000000000000000000000005",
+          "device_hash": "d5",
+          "payment_fingerprint": "same-at-limit",
+          "account_created_at": "2026-01-01T00:00:00Z"
+        },
+        {
+          "entry_id": "00000000000000000000000000000006",
+          "device_hash": "d6",
+          "payment_fingerprint": "broker-payment",
+          "account_created_at": "2026-01-01T00:00:00Z"
+        },
+        {
+          "entry_id": "00000000000000000000000000000007",
+          "device_hash": "d7",
+          "payment_fingerprint": "broker-payment",
+          "account_created_at": "2026-01-01T00:00:00Z"
+        },
+        {
+          "entry_id": "00000000000000000000000000000008",
+          "device_hash": "d8",
+          "payment_fingerprint": "broker-payment",
+          "account_created_at": "2026-01-01T00:00:00Z"
+        },
+        {
+          "entry_id": "00000000000000000000000000000009",
+          "device_hash": "d9",
+          "payment_fingerprint": "p9",
+          "account_created_at": "2026-10-03T12:01:00Z"
+        }
+      ],
+      "expected": [
+        [
+          "00000000000000000000000000000001",
+          "sybil:device"
+        ],
+        [
+          "00000000000000000000000000000002",
+          "sybil:device"
+        ],
+        [
+          "00000000000000000000000000000003",
+          "sybil:device"
+        ],
+        [
+          "00000000000000000000000000000006",
+          "sybil:payment"
+        ],
+        [
+          "00000000000000000000000000000007",
+          "sybil:payment"
+        ],
+        [
+          "00000000000000000000000000000008",
+          "sybil:payment"
+        ],
+        [
+          "00000000000000000000000000000009",
+          "sybil:fresh"
+        ]
+      ],
+      "expected_bytes_utf8": "{\"entry_id\":\"00000000000000000000000000000001\",\"reason\":\"sybil:device\"}\n{\"entry_id\":\"00000000000000000000000000000002\",\"reason\":\"sybil:device\"}\n{\"entry_id\":\"00000000000000000000000000000003\",\"reason\":\"sybil:device\"}\n{\"entry_id\":\"00000000000000000000000000000006\",\"reason\":\"sybil:payment\"}\n{\"entry_id\":\"00000000000000000000000000000007\",\"reason\":\"sybil:payment\"}\n{\"entry_id\":\"00000000000000000000000000000008\",\"reason\":\"sybil:payment\"}\n{\"entry_id\":\"00000000000000000000000000000009\",\"reason\":\"sybil:fresh\"}\n",
+      "shuffled_facts": [
+        {
+          "entry_id": "00000000000000000000000000000009",
+          "device_hash": "d9",
+          "payment_fingerprint": "p9",
+          "account_created_at": "2026-10-03T12:01:00Z"
+        },
+        {
+          "entry_id": "00000000000000000000000000000008",
+          "device_hash": "d8",
+          "payment_fingerprint": "broker-payment",
+          "account_created_at": "2026-01-01T00:00:00Z"
+        },
+        {
+          "entry_id": "00000000000000000000000000000007",
+          "device_hash": "d7",
+          "payment_fingerprint": "broker-payment",
+          "account_created_at": "2026-01-01T00:00:00Z"
+        },
+        {
+          "entry_id": "00000000000000000000000000000006",
+          "device_hash": "d6",
+          "payment_fingerprint": "broker-payment",
+          "account_created_at": "2026-01-01T00:00:00Z"
+        },
+        {
+          "entry_id": "00000000000000000000000000000005",
+          "device_hash": "d5",
+          "payment_fingerprint": "same-at-limit",
+          "account_created_at": "2026-01-01T00:00:00Z"
+        },
+        {
+          "entry_id": "00000000000000000000000000000004",
+          "device_hash": "d4",
+          "payment_fingerprint": "same-at-limit",
+          "account_created_at": "2026-01-01T00:00:00Z"
+        },
+        {
+          "entry_id": "00000000000000000000000000000003",
+          "device_hash": "shared-device",
+          "payment_fingerprint": "p3",
+          "account_created_at": "2026-01-01T00:00:00Z"
+        },
+        {
+          "entry_id": "00000000000000000000000000000002",
+          "device_hash": "shared-device",
+          "payment_fingerprint": "p2",
+          "account_created_at": "2026-01-01T00:00:00Z"
+        },
+        {
+          "entry_id": "00000000000000000000000000000001",
+          "device_hash": "shared-device",
+          "payment_fingerprint": "p1",
+          "account_created_at": "2026-01-01T00:00:00Z"
+        }
+      ],
+      "shuffled_expected": [
+        [
+          "00000000000000000000000000000001",
+          "sybil:device"
+        ],
+        [
+          "00000000000000000000000000000002",
+          "sybil:device"
+        ],
+        [
+          "00000000000000000000000000000003",
+          "sybil:device"
+        ],
+        [
+          "00000000000000000000000000000006",
+          "sybil:payment"
+        ],
+        [
+          "00000000000000000000000000000007",
+          "sybil:payment"
+        ],
+        [
+          "00000000000000000000000000000008",
+          "sybil:payment"
+        ],
+        [
+          "00000000000000000000000000000009",
+          "sybil:fresh"
+        ]
+      ]
+    },
+    {
+      "rules": [
+        {
+          "id": "device_limit",
+          "kind": "max_per_device",
+          "limit": 2
+        }
+      ],
+      "opens_at": "2026-10-04T12:00:00Z",
+      "facts": [
+        {
+          "entry_id": "00000000000000000000000000000001",
+          "device_hash": "pair"
+        },
+        {
+          "entry_id": "00000000000000000000000000000002",
+          "device_hash": "pair"
+        }
+      ],
+      "expected": [],
+      "expected_bytes_utf8": ""
+    }
+  ]
+}
