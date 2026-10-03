@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+keys/
+frontend/node_modules/
+frontend/dist/
+.env
+.playwright-mcp/
+*.log
