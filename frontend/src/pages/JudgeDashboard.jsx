@@ -219,7 +219,7 @@ export default function JudgeDashboard() {
           </div>
           {drops.error && <p role="alert" className="fd-error">{messageForError(drops.error)}</p>}
           {!selectedDropId && !drops.error && <p role="status">Loading drops…</p>}
-          <InvariantsPanel invariants={invariants.data} error={invariants.error} />
+          <InvariantsPanel invariants={invariants.data} error={invariants.error} loading={invariants.loading} />
         </section>
       </main>
       <Grain opacity={0.07} />
