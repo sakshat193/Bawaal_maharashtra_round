@@ -1,4 +1,5 @@
 export const ERROR_MESSAGES = Object.freeze({
+  payment_unavailable: "Card checkout isn't available right now. Use the payment buttons below.",
   invalid_request: 'The request could not be processed. Check the details and try again.',
   window_closed: 'The registration window is closed.',
   entry_exists_different_terms: 'An entry for this drop already exists with different terms.',

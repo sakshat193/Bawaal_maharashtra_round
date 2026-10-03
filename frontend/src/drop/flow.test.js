@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import * as flow from './flow.js';
 import { createEntryBody, formatCountdown, formatPaise, getOrCreateOrderId } from './flow.js';
 
 test('entry request copies the proof and uses the API field names', () => {
@@ -51,4 +52,14 @@ test('order id is created once and reused for the same offer', () => {
 
   assert.equal(first, 'order-1');
   assert.equal(second, first);
+});
+
+
+test('Razorpay body uses the original stored order and only the provider fields', () => {
+  assert.equal(typeof flow.razorpayPaymentBody, 'function');
+  const proof={razorpay_order_id:'provider-order',razorpay_payment_id:'payment',razorpay_signature:'signature',extra:'discard'};
+  assert.deepEqual(flow.razorpayPaymentBody('original-order',proof),{
+    order_id:'original-order',provider:'razorpay',razorpay_order_id:'provider-order',razorpay_payment_id:'payment',razorpay_signature:'signature'
+  });
+  assert.throws(()=>flow.razorpayPaymentBody(null,proof));
 });

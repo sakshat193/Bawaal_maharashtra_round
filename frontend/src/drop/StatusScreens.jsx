@@ -2,8 +2,29 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, serverNow } from '../api/client.js';
 import { messageForError, RULE_TEXT } from '../api/messages.js';
-import { formatCountdown, formatPaise, getOrCreateOrderId, readAcceptedEntry } from './flow.js';
+import { formatCountdown, formatPaise, getOrCreateOrderId, readAcceptedEntry, razorpayPaymentBody } from './flow.js';
 import DrumHero from '../three/DrumHero.jsx';
+
+let razorpayScript;
+let checkoutUnavailable = false;
+function loadRazorpay() {
+  if (window.Razorpay) return Promise.resolve();
+  if (razorpayScript) return razorpayScript;
+  razorpayScript = new Promise((resolve,reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    script.onload = () => window.Razorpay ? resolve() : reject(new Error('Razorpay Checkout did not initialize.'));
+    script.onerror = () => reject(new Error('Could not load Razorpay Checkout.'));
+    document.head.appendChild(script);
+  }).catch(reason => { razorpayScript = null; throw reason; });
+  return razorpayScript;
+}
+
+function isCheckoutUnavailable() {
+  try { return checkoutUnavailable || Boolean(globalThis.sessionStorage?.getItem('fd.razorpay.unavailable')); }
+  catch { return checkoutUnavailable; }
+}
 
 function useCountdown(deadline) {
   const [now, setNow] = useState(serverNow());
@@ -94,6 +115,7 @@ const STATUS_COPY = Object.freeze({
 });
 
 export function Results({ drop, me, draw, refresh }) {
+  const [hideRazorpay, setHideRazorpay] = useState(isCheckoutUnavailable);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const entry = me.entry;
@@ -129,6 +151,38 @@ export function Results({ drop, me, draw, refresh }) {
     await api(`/api/offers/${encodeURIComponent(offer.offer_id)}/pay`, { method: 'POST', body: { order_id: id, result } });
   });
 
+  async function startRazorpay() {
+    setBusy(true);
+    setError(null);
+    let checkout;
+    try {
+      checkout = await api(`/api/offers/${encodeURIComponent(offer.offer_id)}/checkout`, {method:'POST'});
+    } catch (reason) {
+      checkoutUnavailable = true;
+      setHideRazorpay(true);
+      try { globalThis.sessionStorage?.setItem('fd.razorpay.unavailable','1'); } catch { /* Memory preserves the session flag. */ }
+      setError(messageForError(reason));
+      setBusy(false);
+      return;
+    }
+    try {
+      await loadRazorpay();
+      const payment = new window.Razorpay({
+        key:checkout.key_id, order_id:checkout.provider_order_id, amount:checkout.amount_paise, currency:checkout.currency,
+        handler: result => mutate(async () => {
+          const id = globalThis.sessionStorage?.getItem(`fd.order.${offer.offer_id}`);
+          await api(`/api/offers/${encodeURIComponent(offer.offer_id)}/pay`, {method:'POST',body:razorpayPaymentBody(id,result)});
+        }),
+        modal:{ondismiss:()=>setBusy(false)}
+      });
+      payment.on?.('payment.failed',()=>{setError('Card payment did not complete. You can try again within the payment window.');setBusy(false);});
+      payment.open();
+    } catch (reason) {
+      setError(messageForError(reason));
+      setBusy(false);
+    }
+  }
+
   if (entry.status === 'offered') {
     return (
       <ScreenFrame eyebrow={`Round ${offer?.round ?? '—'} · Rank ${entry.rank?.toLocaleString('en-IN') ?? '—'}`} title="A ticket is held for you.">
@@ -157,6 +211,7 @@ export function Results({ drop, me, draw, refresh }) {
         <div className="fd-actions">
           <button className="btn btn-amber" disabled={busy} onClick={() => pay('success')}>Succeed payment</button>
           <button className="btn btn-ghost" disabled={busy} onClick={() => pay('fail')}>Fail payment</button>
+          {!hideRazorpay && <button className="btn btn-ghost" disabled={busy} onClick={startRazorpay}>Pay with Razorpay (test)</button>}
         </div>
         {error && <p role="alert" className="fd-error">{error}</p>}
         <DrawSummary entries={drop.counts.entries} winners={winners} phase="won" />

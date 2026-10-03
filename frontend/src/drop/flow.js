@@ -58,3 +58,13 @@ export function readAcceptedEntry(dropId) {
   if (memory) return memory;
   try { return JSON.parse(sessionStore()?.getItem(`fd.receipt.${dropId}`) || 'null'); } catch { return null; }
 }
+
+export function razorpayPaymentBody(orderId, result) {
+  if (typeof orderId !== 'string' || !orderId) throw new Error('order_not_available');
+  const body = {order_id:orderId, provider:'razorpay'};
+  for (const field of ['razorpay_order_id','razorpay_payment_id','razorpay_signature']) {
+    if (typeof result?.[field] !== 'string' || !result[field]) throw new Error('invalid_payment_callback');
+    body[field] = result[field];
+  }
+  return body;
+}

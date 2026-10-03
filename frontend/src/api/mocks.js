@@ -146,6 +146,9 @@ export const worker = setupWorker(
     setScenario('payment_pending');
     return HttpResponse.json(getFixture(json, 'redeemOffer.200.json'));
   }),
+  http.post('/api/offers/:offerId/checkout', () =>
+    injectedOrFixture('createPaymentCheckout.503.payment_unavailable.json', 503)
+  ),
   http.post('/api/offers/:offerId/pay', async ({ request }) => {
     const error = consumeNextError();
     if (error) return error;
