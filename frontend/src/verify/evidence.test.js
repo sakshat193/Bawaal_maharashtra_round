@@ -2,7 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readEvidence } from './evidence.js';
 
-test('readEvidence reads snapshot evidence from response headers', () => {
+function ndjsonResponse(headers) {
+  return {
+    headers,
+    body: '{"entry_id":"one"}\n{"entry_id":"two"}\n',
+    json() {
+      assert.fail('NDJSON response bodies must not be read as one JSON value');
+    }
+  };
+}
+
+test('readEvidence reads snapshot evidence from headers without parsing the NDJSON body', () => {
   const headers = new Headers({
     'X-Fairdrop-Snapshot-Sha256': 'snapshot-hash',
     'X-Fairdrop-Exclusions-Sha256': 'exclusions-hash',
@@ -10,7 +20,7 @@ test('readEvidence reads snapshot evidence from response headers', () => {
     'X-Fairdrop-Timestamped-At': '2026-10-04T13:12:00Z'
   });
 
-  assert.deepEqual(readEvidence(headers), {
+  assert.deepEqual(readEvidence(ndjsonResponse(headers)), {
     snapshotHash: 'snapshot-hash',
     exclusionsHash: 'exclusions-hash',
     sealedAt: '2026-10-04T13:10:00Z',
@@ -25,5 +35,5 @@ test('readEvidence explains when the timestamp header is absent', () => {
     'X-Fairdrop-Sealed-At': '2026-10-04T13:10:00Z'
   });
 
-  assert.equal(readEvidence(headers).timestampedAt, 'Not timestamped yet');
+  assert.equal(readEvidence(ndjsonResponse(headers)).timestampedAt, 'Not timestamped yet');
 });

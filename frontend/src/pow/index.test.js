@@ -23,3 +23,16 @@ test('solvePow rejects with AbortError when its signal aborts', async () => {
 
   await assert.rejects(pending, { name: 'AbortError' });
 });
+
+test('solvePow stops reporting progress when onProgress aborts the signal', async () => {
+  const controller = new AbortController();
+  let updates = 0;
+  const pending = solvePow({ k: 100, startIndex: 0, prior: [] }, () => {
+    updates += 1;
+    controller.abort();
+  }, controller.signal);
+
+  await assert.rejects(pending, { name: 'AbortError' });
+  await new Promise(resolve => setTimeout(resolve, 100));
+  assert.equal(updates, 1);
+});

@@ -1,0 +1,23 @@
+{
+  "phase": "drawn",
+  "server_time": "2026-10-04T13:05:00Z",
+  "entry": {
+    "entry_id": "9f2c4a7e1b3d5f60718293a4b5c6d7e8",
+    "tier_id": "gold",
+    "quantity": 2,
+    "status": "payment_pending",
+    "rank": 184,
+    "waitlist_position": null,
+    "exclusion_reason": null
+  },
+  "offer": {
+    "offer_id": "3b8e2c1a-5d4f-4a6b-8c9d-0e1f2a3b4c5d",
+    "tier_id": "gold",
+    "quantity": 2,
+    "amount_paise": 900000,
+    "round": 0,
+    "status": "payment_pending",
+    "expires_at": "2026-10-04T13:22:30Z",
+    "pay_deadline": "2026-10-04T13:18:30Z"
+  }
+}

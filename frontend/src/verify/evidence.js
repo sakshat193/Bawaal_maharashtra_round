@@ -1,4 +1,5 @@
-export function readEvidence(headers) {
+export function readEvidence(response) {
+  const { headers } = response;
   return {
     snapshotHash: headers.get('X-Fairdrop-Snapshot-Sha256'),
     exclusionsHash: headers.get('X-Fairdrop-Exclusions-Sha256'),

@@ -13,7 +13,7 @@ export default function Verifier({ dropId }) {
     fetch(`/api/drops/${encodeURIComponent(dropId)}/snapshot`, { signal: controller.signal })
       .then(response => {
         if (!response.ok) throw new Error('The snapshot could not be loaded.');
-        setEvidence(readEvidence(response.headers));
+        setEvidence(readEvidence(response));
       })
       .catch(reason => {
         if (reason.name !== 'AbortError') setError(reason.message || 'The snapshot could not be loaded.');

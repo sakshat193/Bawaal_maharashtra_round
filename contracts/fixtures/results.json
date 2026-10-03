@@ -1,0 +1,84 @@
+{
+  "generated_at": "2026-10-04T13:05:00Z",
+  "modes": {
+    "naive_fcfs": {
+      "profiles": {
+        "honest_singles": {
+          "bot": false,
+          "identities": 180,
+          "entries": 200,
+          "tickets": 160
+        },
+        "speed_bots": {
+          "bot": true,
+          "group": false,
+          "identities": 40,
+          "entries": 180,
+          "tickets": 95
+        },
+        "honest_groups": {
+          "bot": false,
+          "group": true,
+          "identities": 20,
+          "entries": 40,
+          "tickets": 0
+        }
+      },
+      "exclusions_by_rule": {}
+    },
+    "hardened_fcfs": {
+      "profiles": {
+        "honest_singles": {
+          "bot": false,
+          "identities": 180,
+          "entries": 200,
+          "tickets": 178
+        },
+        "speed_bots": {
+          "bot": true,
+          "group": false,
+          "identities": 40,
+          "entries": 180,
+          "tickets": 63
+        },
+        "honest_groups": {
+          "bot": false,
+          "group": true,
+          "identities": 20,
+          "entries": 40,
+          "tickets": 9
+        }
+      },
+      "exclusions_by_rule": {}
+    },
+    "lottery": {
+      "profiles": {
+        "honest_singles": {
+          "bot": false,
+          "identities": 180,
+          "entries": 200,
+          "tickets": 180
+        },
+        "speed_bots": {
+          "bot": true,
+          "group": false,
+          "identities": 40,
+          "entries": 180,
+          "tickets": 20
+        },
+        "honest_groups": {
+          "bot": false,
+          "group": true,
+          "identities": 20,
+          "entries": 40,
+          "tickets": 70
+        }
+      },
+      "exclusions_by_rule": {
+        "device": 12,
+        "payment": 4,
+        "fresh": 9
+      }
+    }
+  }
+}

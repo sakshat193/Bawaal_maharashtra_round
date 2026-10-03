@@ -35,6 +35,7 @@ export function solvePow(params, onProgress = () => {}, signal) {
         fail(error);
         return;
       }
+      if (signal?.aborted) return;
       index += 1;
 
       if (nonces.length >= k) {

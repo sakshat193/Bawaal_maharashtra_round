@@ -1,9 +1,25 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CONCERTS, GENRES } from './data.js';
 import Poster, { DateChip, Pill } from './Poster.jsx';
 
 export function Home({ st }) {
   const { S, actions, describe } = st;
+  const [drops, setDrops] = useState([]);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch('/api/drops', { signal: controller.signal })
+      .then(response => {
+        if (!response.ok) throw new Error('Drops could not be loaded.');
+        return response.json();
+      })
+      .then(result => setDrops(Array.isArray(result.drops) ? result.drops : []))
+      .catch(reason => {
+        if (reason.name !== 'AbortError') setDrops([]);
+      });
+
+    return () => controller.abort();
+  }, []);
   const ql = S.q.trim().toLowerCase();
   const filtered = CONCERTS.filter(x => (S.genre === 'All' || x.genre === S.genre) && (!ql || `${x.artist} ${x.venue} ${x.city}`.toLowerCase().includes(ql))).map(describe);
   const onSale = CONCERTS.filter(x => x.status === 'onsale' || x.status === 'few').map(describe);
@@ -25,6 +41,17 @@ export function Home({ st }) {
           {GENRES.map(g => <button key={g} className={'c-chip' + (S.genre === g ? ' on' : '')} onClick={() => actions.setGenre(g)}>{g}</button>)}
         </div>
       </div>
+
+      {drops.map(drop => (
+        <article key={drop.drop_id} aria-label={`${drop.name}, ${drop.venue}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap', marginBottom: 30, padding: '22px 24px', border: '1px solid rgba(196,181,253,.28)', background: 'rgba(124,58,237,.08)' }}>
+          <div>
+            <div className="c-sub" style={{ marginBottom: 7 }}>Fair Drop · {drop.phase}</div>
+            <h2 style={{ margin: 0, fontFamily: 'var(--display)', fontSize: 32, lineHeight: 1, textTransform: 'uppercase' }}>{drop.name}</h2>
+            <div style={{ marginTop: 8, color: 'var(--ink3)' }}>{drop.venue} · {new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' }).format(new Date(drop.starts_at))}</div>
+          </div>
+          <Link to="/drop" className="btn btn-light">View drop</Link>
+        </article>
+      ))}
 
       {noFilter && (
         <div className="c-hero">

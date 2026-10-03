@@ -1,0 +1,15 @@
+{
+  "drops": [
+    {
+      "drop_id": "6f1c2b9e-3d4a-4e8b-9a71-0c5d2e7f8a13",
+      "name": "Fair Drop Live",
+      "venue": "NSCI Dome, Mumbai",
+      "starts_at": "2026-10-04T14:00:00Z",
+      "opens_at": "2026-10-04T13:00:00Z",
+      "closes_at": "2026-10-04T13:10:00Z",
+      "allocation_mode": "lottery_wil",
+      "phase": "open"
+    }
+  ],
+  "server_time": "2026-10-04T13:05:00Z"
+}
