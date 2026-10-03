@@ -9,6 +9,8 @@ export const CONCERTS = Object.freeze([
   { hue: 345, hue2: 285, photo: 32 }
 ]);
 
+export const PALETTE = Object.freeze(['#C4B5FD', '#A78BFA', '#F5D0FE', '#93C5FD']);
+
 const PHASE_STYLE = Object.freeze({
   scheduled: { pill: 'Scheduled', short: 'Scheduled', bg: 'rgba(124,58,237,0.18)', color: '#C4B5FD' },
   open: { pill: 'Registration open', short: 'Open', bg: 'rgba(134,239,172,0.14)', color: '#86EFAC' },

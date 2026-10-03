@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api, serverNow } from '../api/client.js';
 import { messageForError, RULE_TEXT } from '../api/messages.js';
 import { formatCountdown, formatPaise, getOrCreateOrderId } from './flow.js';
+import DrumHero from '../three/DrumHero.jsx';
 
 function useCountdown(deadline) {
   const [now, setNow] = useState(serverNow());
@@ -65,10 +66,7 @@ export function Registered({ drop }) {
           <button type="button" className="btn btn-ghost" onClick={copyReceipt} disabled={!receiptResponse}>{copied ? 'Copied' : 'Copy receipt'}</button>
         </div>
       )}
-      <div className="fd-drum-summary" data-drum-phase="filling">
-        <span>Entry pool</span><b>{drop.counts.entries.toLocaleString('en-IN')} entries</b>
-        <div className="fd-progress"><span style={{ width: `${Math.min(100, drop.counts.entries / 50000 * 100)}%` }} /></div>
-      </div>
+      <DrumHero entries={drop.counts.entries} phase="filling" />
     </ScreenFrame>
   );
 }
@@ -91,6 +89,7 @@ export function Sealed({ drop, snapshot }) {
         <div><span>Timestamped at</span><code>{timestampedAt || 'Not timestamped yet'}</code></div>
         {timestampProof && <details><summary>Timestamp proof</summary><code>{timestampProof}</code></details>}
       </div>
+      <DrumHero entries={drop.counts.entries} phase="sealed" label="Sealed entry pool" />
       <Link className="btn btn-ghost" to={`/verify/${encodeURIComponent(drop.drop_id)}`}>Verify published evidence</Link>
     </ScreenFrame>
   );
@@ -151,7 +150,7 @@ export function Results({ drop, me, draw, refresh }) {
         </div>
         <p className="c-sub">Payment must finish within {drop.pay_deadline_s} seconds after you press Buy.</p>
         {error && <p role="alert" className="fd-error">{error}</p>}
-        <DrawSummary winners={winners} phase="draw" />
+        <DrawSummary entries={drop.counts.entries} winners={winners} phase="draw" />
       </ScreenFrame>
     );
   }
@@ -168,7 +167,7 @@ export function Results({ drop, me, draw, refresh }) {
           <button className="btn btn-ghost" disabled={busy} onClick={() => pay('fail')}>Fail payment</button>
         </div>
         {error && <p role="alert" className="fd-error">{error}</p>}
-        <DrawSummary winners={winners} phase="won" />
+        <DrawSummary entries={drop.counts.entries} winners={winners} phase="won" />
       </ScreenFrame>
     );
   }
@@ -182,13 +181,13 @@ export function Results({ drop, me, draw, refresh }) {
           <b>{entry.quantity} ticket{entry.quantity === 1 ? '' : 's'}</b>
           <small>Order {order}</small>
         </article>
-        <DrawSummary winners={winners} phase="won" />
+        <DrawSummary entries={drop.counts.entries} winners={winners} phase="won" />
       </ScreenFrame>
     );
   }
 
   if (entry.status === 'waitlisted') {
-    return <ScreenFrame eyebrow="Draw result" title="You're on the waitlist."><div className="fd-state-grid"><div><span>Rank</span><b>#{entry.rank.toLocaleString('en-IN')}</b></div><div><span>Live waitlist position</span><b>#{entry.waitlist_position.toLocaleString('en-IN')}</b></div></div><DrawSummary winners={winners} phase="lost" /></ScreenFrame>;
+    return <ScreenFrame eyebrow="Draw result" title="You're on the waitlist."><div className="fd-state-grid"><div><span>Rank</span><b>#{entry.rank.toLocaleString('en-IN')}</b></div><div><span>Live waitlist position</span><b>#{entry.waitlist_position.toLocaleString('en-IN')}</b></div></div><DrawSummary entries={drop.counts.entries} winners={winners} phase="lost" /></ScreenFrame>;
   }
 
   if (entry.status === 'excluded') {
@@ -207,16 +206,11 @@ export function Results({ drop, me, draw, refresh }) {
     <ScreenFrame eyebrow="Draw result" title={STATUS_COPY[entry.status] ? 'The draw is complete.' : 'Your result is being updated.'}>
       {STATUS_COPY[entry.status] && <p className="fd-lead">{STATUS_COPY[entry.status]}</p>}
       {entry.status === 'not_selected' && <p className="c-sub">Rank #{entry.rank.toLocaleString('en-IN')}</p>}
-      <DrawSummary winners={winners} phase="lost" />
+      <DrawSummary entries={drop.counts.entries} winners={winners} phase="lost" />
     </ScreenFrame>
   );
 }
 
-export function DrawSummary({ winners, phase }) {
-  return (
-    <div className="fd-drum-summary" data-drum-phase={phase}>
-      <span>Draw allocation</span><b>{winners.toLocaleString('en-IN')} entries offered</b>
-      <div className="fd-progress"><span style={{ width: `${Math.min(100, winners / 6000 * 100)}%` }} /></div>
-    </div>
-  );
+export function DrawSummary({ entries, winners, phase }) {
+  return <DrumHero entries={entries} winners={winners} phase={phase} label="Draw allocation" />;
 }

@@ -3,6 +3,7 @@ import { RULE_TEXT } from '../api/messages.js';
 import { serverNow } from '../api/client.js';
 import { formatPaise } from './flow.js';
 import { present } from '../pages/concert/data.js';
+import VenueCanvas from '../pages/concert/VenueCanvas.jsx';
 import EntryForm from './EntryForm.jsx';
 
 const PALETTE = ['#C4B5FD', '#A78BFA', '#F5D0FE', '#93C5FD'];
@@ -17,6 +18,10 @@ export default function DropDetail({ drop, invariants, entering, onEnter, onClos
   const [now, setNow] = useState(serverNow());
   const selected = tiers.find(tier => tier.tier_id === tierId) || ordered[0];
   const inventory = invariants?.tiers || [];
+  const heldByTier = useMemo(
+    () => Object.fromEntries(inventory.map(item => [item.tier_id, item.held])),
+    [inventory]
+  );
   const capacity = tiers.reduce((sum, tier) => sum + tier.capacity, 0);
   const held = tiers.reduce((sum, tier) => sum + (inventory.find(row => row.tier_id === tier.tier_id)?.held || 0), 0);
   const availability = tier => {
@@ -117,6 +122,7 @@ export default function DropDetail({ drop, invariants, entering, onEnter, onClos
           )}
         </div>
       </div>
+      <VenueCanvas tiers={ordered} held={heldByTier} tier={selected?.tier_id} onPick={setTierId} />
       {entering && selected && <EntryForm drop={drop} tier={selected} quantity={quantity} onClose={onCloseEntry} refresh={refresh} onLogin={onLogin} />}
     </div>
   );
