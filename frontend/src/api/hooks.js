@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api } from './client.js';
+import { api, useIdentity } from './client.js';
 
 function jitter([minimum, maximum]) {
   const low = Math.max(0, Math.floor(minimum));
@@ -70,22 +70,15 @@ export function useDrop(dropId) {
   return usePoll(load, interval, Boolean(dropId), dropId);
 }
 
-function hasIdentity() {
-  try {
-    return Boolean(globalThis.sessionStorage?.getItem('fd.jwt'));
-  } catch {
-    return false;
-  }
-}
-
 export function useMe(dropId, phase) {
+  const identity = useIdentity();
   const load = useCallback(({ signal }) => api(`/api/drops/${encodeURIComponent(dropId)}/me`, { signal }), [dropId]);
   const interval = useCallback(me => {
     const status = me?.offer?.status;
     if (status === 'offered' || status === 'payment_pending') return [1000, 2000];
     return phaseInterval(phase || me?.phase);
   }, [phase]);
-  return usePoll(load, interval, () => Boolean(dropId) && hasIdentity(), dropId);
+  return usePoll(load, interval, Boolean(dropId && identity), `${dropId}:${identity || ''}`);
 }
 
 export function useInvariants(dropId, phase) {

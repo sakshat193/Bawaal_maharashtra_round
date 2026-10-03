@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { api } from '../api/client.js';
+import { api, setIdentity, useIdentity } from '../api/client.js';
 import { messageForError } from '../api/messages.js';
 import { solvePow } from '../pow/index.js';
 import Turnstile from './Turnstile.jsx';
-import { createEntryBody } from './flow.js';
+import { createEntryBody, rememberAcceptedEntry } from './flow.js';
+import { Registered } from './StatusScreens.jsx';
 
 const powKey = dropId => `fd.pow.${dropId}`;
 
@@ -15,14 +16,6 @@ function readPow(dropId) {
     // A broken saved progress record can be replaced by a fresh challenge.
   }
   return null;
-}
-
-function hasToken() {
-  try {
-    return Boolean(globalThis.sessionStorage?.getItem('fd.jwt'));
-  } catch {
-    return false;
-  }
 }
 
 function savePow(dropId, value) {
@@ -43,7 +36,8 @@ function clearPow(dropId) {
 
 export default function EntryForm({ drop, tier, quantity, onClose, refresh, onLogin }) {
   const [username, setUsername] = useState('');
-  const [signedIn, setSignedIn] = useState(hasToken);
+  const identity = useIdentity();
+  const [accepted, setAccepted] = useState(null);
   const [turnstileToken, setTurnstileToken] = useState('');
   const [powState, setPowState] = useState(() => readPow(drop.drop_id));
   const [solved, setSolved] = useState(() => readPow(drop.drop_id)?.nonces?.length || 0);
@@ -60,8 +54,7 @@ export default function EntryForm({ drop, tier, quantity, onClose, refresh, onLo
     setError(null);
     try {
       const result = await api('/platform/login', { method: 'POST', body: { username: username.trim() } });
-      globalThis.sessionStorage?.setItem('fd.jwt', result.token);
-      setSignedIn(true);
+      setIdentity(result.token);
       onLogin?.();
     } catch (reason) {
       setError(messageForError(reason));
@@ -119,7 +112,8 @@ export default function EntryForm({ drop, tier, quantity, onClose, refresh, onLo
         method: 'POST',
         body: request
       });
-      globalThis.sessionStorage?.setItem(`fd.receipt.${drop.drop_id}`, JSON.stringify(receipt));
+      rememberAcceptedEntry(drop.drop_id, receipt);
+      setAccepted(receipt);
       clearPow(drop.drop_id);
       setSubmitted(true);
       refresh();
@@ -132,7 +126,9 @@ export default function EntryForm({ drop, tier, quantity, onClose, refresh, onLo
 
   const powReady = !drop.pow_required || solved >= (drop.pow_k || 0);
   const turnstileReady = !drop.turnstile_required || Boolean(turnstileToken);
-  const canSubmit = signedIn && turnstileReady && powReady && !busy && !submitted;
+  const canSubmit = identity && turnstileReady && powReady && !busy && !submitted;
+
+  if (accepted) return <Registered drop={drop} receiptResponse={accepted} />;
 
   return (
     <section className="fd-entry" aria-labelledby="entry-title">
@@ -142,7 +138,7 @@ export default function EntryForm({ drop, tier, quantity, onClose, refresh, onLo
       </div>
       <p className="c-sub">{quantity} × {tier.name}. Everyone who wants a ticket enters individually.</p>
 
-      {!signedIn && (
+      {!identity && (
         <form onSubmit={login} style={{ display: 'grid', gap: 12, maxWidth: 520 }}>
           <label className="fd-label">Mock sign in
             <input required autoComplete="username" value={username} onChange={event => setUsername(event.target.value)} placeholder="Your username" />
@@ -151,9 +147,9 @@ export default function EntryForm({ drop, tier, quantity, onClose, refresh, onLo
         </form>
       )}
 
-      {signedIn && drop.turnstile_required && <Turnstile onToken={setTurnstileToken} />}
+      {identity && drop.turnstile_required && <Turnstile onToken={setTurnstileToken} />}
 
-      {signedIn && drop.pow_required && (
+      {identity && drop.pow_required && (
         <div className="fd-check">
           <span>Proof of work · {solved}/{drop.pow_k} ticks</span>
           <div role="progressbar" aria-label="Proof of work progress" aria-valuemin="0" aria-valuemax={drop.pow_k} aria-valuenow={solved} className="fd-progress">

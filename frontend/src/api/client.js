@@ -1,3 +1,5 @@
+import { useSyncExternalStore } from 'react';
+
 /** @typedef {import('./schema').paths} ApiPaths */
 /** @typedef {keyof ApiPaths | string} ApiPath */
 
@@ -31,12 +33,32 @@ function stored(key) {
   }
 }
 
-function clearIdentity() {
+const identityListeners = new Set();
+
+export function getIdentity() { return stored('fd.jwt'); }
+
+export function subscribeIdentity(listener) {
+  identityListeners.add(listener);
+  const onStorage = event => { if (event.key === 'fd.jwt' || event.key === null) listener(); };
+  globalThis.addEventListener?.('storage', onStorage);
+  return () => { identityListeners.delete(listener); globalThis.removeEventListener?.('storage', onStorage); };
+}
+
+export function useIdentity() {
+  return useSyncExternalStore(subscribeIdentity, getIdentity, () => null);
+}
+
+export function setIdentity(token) {
   try {
-    globalThis.sessionStorage?.removeItem('fd.jwt');
-  } catch {
-    // The request error remains useful even when storage is unavailable.
+    if (token) globalThis.sessionStorage?.setItem('fd.jwt', token);
+    else globalThis.sessionStorage?.removeItem('fd.jwt');
+  } finally {
+    for (const listener of identityListeners) listener();
   }
+}
+
+function clearIdentity() {
+  try { setIdentity(null); } catch { /* Keep the original request error. */ }
 }
 
 /**

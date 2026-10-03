@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, serverNow } from '../api/client.js';
 import { messageForError, RULE_TEXT } from '../api/messages.js';
-import { formatCountdown, formatPaise, getOrCreateOrderId } from './flow.js';
+import { formatCountdown, formatPaise, getOrCreateOrderId, readAcceptedEntry } from './flow.js';
 import DrumHero from '../three/DrumHero.jsx';
 
 function useCountdown(deadline) {
@@ -12,14 +12,6 @@ function useCountdown(deadline) {
     return () => clearInterval(timer);
   }, []);
   return formatCountdown(deadline, now);
-}
-
-function storedJson(key) {
-  try {
-    return JSON.parse(globalThis.sessionStorage?.getItem(key) || 'null');
-  } catch {
-    return null;
-  }
 }
 
 function ScreenFrame({ eyebrow, title, children }) {
@@ -32,8 +24,7 @@ function ScreenFrame({ eyebrow, title, children }) {
   );
 }
 
-export function Registered({ drop }) {
-  const receiptResponse = storedJson(`fd.receipt.${drop.drop_id}`);
+export function Registered({ drop, receiptResponse = readAcceptedEntry(drop.drop_id) }) {
   const receipt = receiptResponse?.receipt;
   const signature = receiptResponse?.receipt_sig || '';
   const closesIn = useCountdown(drop.closes_at);
@@ -110,7 +101,8 @@ export function Results({ drop, me, draw, refresh }) {
   const offerCountdown = useCountdown(offer?.expires_at);
   const payCountdown = useCountdown(offer?.pay_deadline);
   const tier = drop.tiers.find(item => item.tier_id === entry.tier_id);
-  const orderId = offer ? globalThis.sessionStorage?.getItem(`fd.order.${offer.offer_id}`) : null;
+  let orderId = null;
+  try { orderId = offer ? globalThis.sessionStorage?.getItem(`fd.order.${offer.offer_id}`) : null; } catch { /* Use the supported device-recovery screen. */ }
   const winners = draw?.allocation?.length || 0;
 
   async function mutate(action) {

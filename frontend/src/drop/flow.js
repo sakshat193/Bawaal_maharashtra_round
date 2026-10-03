@@ -1,3 +1,5 @@
+import { getIdentity } from '../api/client.js';
+
 export function createEntryBody({ tierId, quantity, turnstileToken, issuedAt, nonces }) {
   return {
     tier_id: tierId,
@@ -40,4 +42,19 @@ export function getOrCreateOrderId(offerId, storage = sessionStore(), createUuid
   if (typeof orderId !== 'string' || !orderId) throw new Error('Secure order id generation is unavailable.');
   storage.setItem(key, orderId);
   return orderId;
+}
+
+const acceptedEntries = new Map();
+const receiptKey = dropId => `${getIdentity() || ''}:${dropId}`;
+
+export function rememberAcceptedEntry(dropId, response) {
+  // Server acceptance is final even if browser persistence is unavailable.
+  acceptedEntries.set(receiptKey(dropId), response);
+  try { sessionStore()?.setItem(`fd.receipt.${dropId}`, JSON.stringify(response)); } catch { /* In-memory receipt remains available. */ }
+}
+
+export function readAcceptedEntry(dropId) {
+  const memory = acceptedEntries.get(receiptKey(dropId));
+  if (memory) return memory;
+  try { return JSON.parse(sessionStore()?.getItem(`fd.receipt.${dropId}`) || 'null'); } catch { return null; }
 }
