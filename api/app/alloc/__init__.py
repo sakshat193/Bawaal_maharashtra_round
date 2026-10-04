@@ -184,7 +184,7 @@ async def redeem_offer(
             (offer_id,),
         )
         if row is None:
-            raise ApiError(404, "not_found")
+            raise ApiError(409, "not_offered")
         status, saved_order, expires_at, pay_deadline, owner_id, pay_seconds = row
         if owner_id != identity.identity_id:
             raise ApiError(403, "offer_not_yours")

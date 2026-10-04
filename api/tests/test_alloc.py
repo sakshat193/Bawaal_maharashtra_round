@@ -17,6 +17,14 @@ from fairdrop_common.drand import time_of
 from fairdrop_common.canonical import snapshot_bytes
 
 from .conftest import TEST_URL, A, drop_body
+from .conftest import login
+
+
+def test_nonexistent_offer_is_not_redeemable(client):
+    response = client.post(f"/api/offers/{uuid.uuid4()}/redeem", headers=login(client, "forged-no-offer"),
+                           json={"order_id": "forged-order"})
+    assert response.status_code == 409
+    assert response.json()["error"] == "not_offered"
 
 
 def _seed_offer(base_url, *, status="offered", expires_in=300, pay_deadline_in=None):
