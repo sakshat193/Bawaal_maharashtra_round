@@ -1,0 +1,7 @@
+{
+  "receipt": {
+    "alg": "Ed25519",
+    "public_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    "kid": "fairdrop-receipt-v1"
+  }
+}

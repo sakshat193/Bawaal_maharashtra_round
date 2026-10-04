@@ -1,81 +1,142 @@
 {
   "schema_version": 1,
-  "source": "example",
+  "source": "fixture",
   "modes": [
     {
       "mode": "naive_fcfs",
-      "entries": 102,
-      "identities": 102,
-      "tickets_won": 80,
+      "entries": 420,
+      "identities": 240,
+      "tickets_won": 255,
       "profiles": {
-        "honest_singles": {"identities": 30, "entries": 30, "tickets_won": 10},
-        "honest_groups": {"identities": 30, "entries": 30, "tickets_won": 10},
-        "speed_bots": {"identities": 20, "entries": 20, "tickets_won": 20},
-        "broker": {"identities": 10, "entries": 10, "tickets_won": 40},
-        "sybil_cluster": {"identities": 6, "entries": 6, "tickets_won": 0},
-        "replay": {"identities": 1, "entries": 1, "tickets_won": 0},
-        "forged_redeem": {"identities": 1, "entries": 1, "tickets_won": 0},
-        "double_redeem": {"identities": 1, "entries": 1, "tickets_won": 0},
-        "late_payer": {"identities": 1, "entries": 1, "tickets_won": 0},
-        "payment_failer": {"identities": 1, "entries": 1, "tickets_won": 0},
-        "reconnect": {"identities": 1, "entries": 1, "tickets_won": 0}
+        "honest_singles": {
+          "bot": false,
+          "cohort": "singles",
+          "identities": 180,
+          "entries": 200,
+          "tickets_won": 160
+        },
+        "speed_bots": {
+          "bot": true,
+          "cohort": "bots",
+          "identities": 40,
+          "entries": 180,
+          "tickets_won": 95
+        },
+        "honest_groups": {
+          "bot": false,
+          "cohort": "group_members",
+          "identities": 20,
+          "entries": 40,
+          "tickets_won": 0
+        }
       },
-      "bot_ticket_share": 0.75,
-      "bot_identity_share": 0.3824,
-      "bot_share_ratio": 1.96,
-      "groups_vs_singles": {"group_members": 10, "singles": 10, "ratio": 1.0},
+      "bot_ticket_share": 0.37254901960784315,
+      "bot_identity_share": 0.16666666666666666,
+      "bot_share_ratio": 2.235294117647059,
+      "groups_vs_singles": {
+        "group_members": 0,
+        "singles": 160,
+        "ratio": 0
+      },
       "exclusions_per_rule": {},
-      "invariants": {"held_within_capacity": true, "held_matches_active_offers": true, "oversell": 0, "double_redemption": 0}
+      "invariants": {
+        "held_within_capacity": true,
+        "held_matches_active_offers": true,
+        "oversell": 0,
+        "double_redemption": 0
+      }
     },
     {
       "mode": "hardened_fcfs",
-      "entries": 102,
-      "identities": 102,
-      "tickets_won": 56,
+      "entries": 420,
+      "identities": 240,
+      "tickets_won": 250,
       "profiles": {
-        "honest_singles": {"identities": 30, "entries": 30, "tickets_won": 25},
-        "honest_groups": {"identities": 30, "entries": 30, "tickets_won": 25},
-        "speed_bots": {"identities": 20, "entries": 20, "tickets_won": 0},
-        "broker": {"identities": 10, "entries": 10, "tickets_won": 0},
-        "sybil_cluster": {"identities": 6, "entries": 6, "tickets_won": 0},
-        "replay": {"identities": 1, "entries": 1, "tickets_won": 1},
-        "forged_redeem": {"identities": 1, "entries": 1, "tickets_won": 1},
-        "double_redeem": {"identities": 1, "entries": 1, "tickets_won": 1},
-        "late_payer": {"identities": 1, "entries": 1, "tickets_won": 1},
-        "payment_failer": {"identities": 1, "entries": 1, "tickets_won": 1},
-        "reconnect": {"identities": 1, "entries": 1, "tickets_won": 1}
+        "honest_singles": {
+          "bot": false,
+          "cohort": "singles",
+          "identities": 180,
+          "entries": 200,
+          "tickets_won": 178
+        },
+        "speed_bots": {
+          "bot": true,
+          "cohort": "bots",
+          "identities": 40,
+          "entries": 180,
+          "tickets_won": 63
+        },
+        "honest_groups": {
+          "bot": false,
+          "cohort": "group_members",
+          "identities": 20,
+          "entries": 40,
+          "tickets_won": 9
+        }
       },
-      "bot_ticket_share": 0.0536,
-      "bot_identity_share": 0.3824,
-      "bot_share_ratio": 0.14,
-      "groups_vs_singles": {"group_members": 25, "singles": 25, "ratio": 1.0},
-      "exclusions_per_rule": {"sybil:device": 6},
-      "invariants": {"held_within_capacity": true, "held_matches_active_offers": true, "oversell": 0, "double_redemption": 0}
+      "bot_ticket_share": 0.252,
+      "bot_identity_share": 0.16666666666666666,
+      "bot_share_ratio": 1.512,
+      "groups_vs_singles": {
+        "group_members": 9,
+        "singles": 178,
+        "ratio": 0.05056179775280899
+      },
+      "exclusions_per_rule": {},
+      "invariants": {
+        "held_within_capacity": true,
+        "held_matches_active_offers": true,
+        "oversell": 0,
+        "double_redemption": 0
+      }
     },
     {
       "mode": "lottery_wil",
-      "entries": 102,
-      "identities": 102,
-      "tickets_won": 58,
+      "entries": 420,
+      "identities": 240,
+      "tickets_won": 270,
       "profiles": {
-        "honest_singles": {"identities": 30, "entries": 30, "tickets_won": 22},
-        "honest_groups": {"identities": 30, "entries": 30, "tickets_won": 22},
-        "speed_bots": {"identities": 20, "entries": 20, "tickets_won": 3},
-        "broker": {"identities": 10, "entries": 10, "tickets_won": 5},
-        "sybil_cluster": {"identities": 6, "entries": 6, "tickets_won": 0},
-        "replay": {"identities": 1, "entries": 1, "tickets_won": 1},
-        "forged_redeem": {"identities": 1, "entries": 1, "tickets_won": 1},
-        "double_redeem": {"identities": 1, "entries": 1, "tickets_won": 1},
-        "late_payer": {"identities": 1, "entries": 1, "tickets_won": 1},
-        "payment_failer": {"identities": 1, "entries": 1, "tickets_won": 1},
-        "reconnect": {"identities": 1, "entries": 1, "tickets_won": 1}
+        "honest_singles": {
+          "bot": false,
+          "cohort": "singles",
+          "identities": 180,
+          "entries": 200,
+          "tickets_won": 180
+        },
+        "speed_bots": {
+          "bot": true,
+          "cohort": "bots",
+          "identities": 40,
+          "entries": 180,
+          "tickets_won": 20
+        },
+        "honest_groups": {
+          "bot": false,
+          "cohort": "group_members",
+          "identities": 20,
+          "entries": 40,
+          "tickets_won": 70
+        }
       },
-      "bot_ticket_share": 0.1897,
-      "bot_identity_share": 0.3824,
-      "bot_share_ratio": 0.496,
-      "groups_vs_singles": {"group_members": 22, "singles": 22, "ratio": 1.0},
-      "exclusions_per_rule": {"sybil:device": 6},
-      "invariants": {"held_within_capacity": true, "held_matches_active_offers": true, "oversell": 0, "double_redemption": 0}
+      "bot_ticket_share": 0.07407407407407407,
+      "bot_identity_share": 0.16666666666666666,
+      "bot_share_ratio": 0.4444444444444444,
+      "groups_vs_singles": {
+        "group_members": 70,
+        "singles": 180,
+        "ratio": 0.3888888888888889
+      },
+      "exclusions_per_rule": {
+        "device": 12,
+        "payment": 4,
+        "fresh": 9
+      },
+      "invariants": {
+        "held_within_capacity": true,
+        "held_matches_active_offers": true,
+        "oversell": 0,
+        "double_redemption": 0
+      }
     }
   ]
 }

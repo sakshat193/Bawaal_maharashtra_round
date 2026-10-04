@@ -1,70 +1,118 @@
-import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ApiError, apiRequest } from './client.js';
+import assert from 'node:assert/strict';
+import { api, ApiError, serverNow } from './client.js';
 
-test('apiRequest sends JSON and the identity bearer token', async () => {
-  const previousFetch = globalThis.fetch;
-  let request;
-  globalThis.fetch = async (path, options) => {
-    request = { path, options };
-    return { ok: true, json: async () => ({ status: 'payment_pending' }) };
+function installGlobals(t, { storage = {}, fetchImpl, now } = {}) {
+  const storageEntries = new Map(Object.entries(storage));
+  const fakeStorage = {
+    getItem: key => storageEntries.get(key) ?? null,
+    setItem: (key, value) => storageEntries.set(key, String(value)),
+    removeItem: key => storageEntries.delete(key)
   };
+  const oldFetch = globalThis.fetch;
+  const oldStorage = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage');
+  const oldNow = Date.now;
+  Object.defineProperty(globalThis, 'sessionStorage', { value: fakeStorage, configurable: true });
+  if (fetchImpl) globalThis.fetch = fetchImpl;
+  if (now !== undefined) Date.now = () => now;
+  t.after(() => {
+    globalThis.fetch = oldFetch;
+    Date.now = oldNow;
+    if (oldStorage) Object.defineProperty(globalThis, 'sessionStorage', oldStorage);
+    else delete globalThis.sessionStorage;
+  });
+  return { storageEntries, fakeStorage };
+}
 
-  try {
-    const result = await apiRequest('/api/offers/id/redeem', {
-      method: 'POST',
-      token: 'identity-token',
-      body: { order_id: 'order-id' },
-    });
-
-    assert.equal(request.path, '/api/offers/id/redeem');
-    assert.equal(request.options.method, 'POST');
-    assert.equal(request.options.headers.get('Authorization'), 'Bearer identity-token');
-    assert.equal(request.options.headers.get('Content-Type'), 'application/json');
-    assert.deepEqual(JSON.parse(request.options.body), { order_id: 'order-id' });
-    assert.deepEqual(result, { status: 'payment_pending' });
-  } finally {
-    globalThis.fetch = previousFetch;
-  }
+const jsonResponse = (data, status = 200) => new Response(JSON.stringify(data), {
+  status,
+  headers: { 'Content-Type': 'application/json' }
 });
 
-test('apiRequest preserves structured API errors', async () => {
-  const previousFetch = globalThis.fetch;
-  globalThis.fetch = async () => ({
-    ok: false,
-    status: 409,
-    json: async () => ({ error: 'offer_expired', message: 'Offer expired' }),
+test('api sends the identity bearer token and tracks server clock skew', async t => {
+  let request;
+  installGlobals(t, {
+    storage: { 'fd.jwt': 'identity-token' },
+    now: 1000,
+    fetchImpl: async (_path, init) => {
+      request = init;
+      return jsonResponse({ phase: 'open', server_time: '1970-01-01T00:00:02.000Z' });
+    }
   });
 
-  try {
-    await assert.rejects(apiRequest('/api/offers/id/redeem'), error => {
-      assert.ok(error instanceof ApiError);
-      assert.equal(error.status, 409);
-      assert.equal(error.code, 'offer_expired');
-      assert.equal(error.message, 'Offer expired');
-      return true;
-    });
-  } finally {
-    globalThis.fetch = previousFetch;
-  }
+  const data = await api('/api/drops/drop-id');
+
+  assert.equal(data.phase, 'open');
+  assert.equal(request.headers.get('Authorization'), 'Bearer identity-token');
+  assert.equal(serverNow(), 2000);
 });
 
-test('apiRequest explains that server errors require the ticket services', async () => {
-  const previousFetch = globalThis.fetch;
-  globalThis.fetch = async () => ({
-    ok: false,
-    status: 500,
-    json: async () => null,
+test('api sends the admin key and JSON mutation body', async t => {
+  let request;
+  installGlobals(t, {
+    storage: { 'fd.admin': 'demo-admin-key' },
+    fetchImpl: async (_path, init) => {
+      request = init;
+      return jsonResponse({ ok: true });
+    }
   });
 
-  try {
-    await assert.rejects(apiRequest('/api/drops'), error => {
-      assert.ok(error instanceof ApiError);
-      assert.equal(error.status, 500);
-      assert.match(error.message, /API and Postgres/);
-      return true;
-    });
-  } finally {
-    globalThis.fetch = previousFetch;
-  }
+  await api('/api/admin/drops/drop-id/open', { method: 'POST', body: { note: 'demo' }, admin: true });
+
+  assert.equal(request.headers.get('X-Admin-Key'), 'demo-admin-key');
+  assert.equal(request.headers.get('Authorization'), null);
+  assert.equal(request.headers.get('Content-Type'), 'application/json');
+  assert.deepEqual(JSON.parse(request.body), { note: 'demo' });
+});
+
+test('api exposes error data and clears the identity token on 401', async t => {
+  const { storageEntries } = installGlobals(t, {
+    storage: { 'fd.jwt': 'expired-token' },
+    fetchImpl: async () => jsonResponse({ error: 'unauthorized', message: 'Sign in again.' }, 401)
+  });
+
+  await assert.rejects(api('/api/drops/drop-id/me'), error => {
+    assert.ok(error instanceof ApiError);
+    assert.equal(error.status, 401);
+    assert.equal(error.code, 'unauthorized');
+    assert.deepEqual(error.data, { error: 'unauthorized', message: 'Sign in again.' });
+    return true;
+  });
+  assert.equal(storageEntries.has('fd.jwt'), false);
+});
+
+test('api returns NDJSON as text without calling response.json', async t => {
+  const ndjson = '{"entry_id":"one"}\n{"entry_id":"two"}\n';
+  installGlobals(t, {
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'Content-Type': 'application/x-ndjson' }),
+      text: async () => ndjson,
+      json() { assert.fail('NDJSON must not be parsed as JSON'); }
+    })
+  });
+
+  assert.equal(await api('/api/drops/drop-id/snapshot'), ndjson);
+});
+
+test('api can return NDJSON and its evidence headers together', async t => {
+  const ndjson = '{"entry_id":"one"}\n';
+  installGlobals(t, {
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      headers: new Headers({
+        'Content-Type': 'application/x-ndjson',
+        'X-Fairdrop-Timestamped-At': '2026-10-04T13:12:00Z'
+      }),
+      text: async () => ndjson,
+      json() { assert.fail('NDJSON must not be parsed as JSON'); }
+    })
+  });
+
+  const response = await api('/api/drops/drop-id/snapshot', { includeHeaders: true });
+
+  assert.equal(response.data, ndjson);
+  assert.equal(response.headers.get('X-Fairdrop-Timestamped-At'), '2026-10-04T13:12:00Z');
 });

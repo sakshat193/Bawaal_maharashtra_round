@@ -1,0 +1,67 @@
+{
+  "drop_id": "6f1c2b9e-3d4a-4e8b-9a71-0c5d2e7f8a13",
+  "name": "Fair Drop Live",
+  "venue": "NSCI Dome, Mumbai",
+  "starts_at": "2026-10-04T14:00:00Z",
+  "opens_at": "2026-10-04T13:00:00Z",
+  "closes_at": "2026-10-04T13:10:00Z",
+  "allocation_mode": "lottery_wil",
+  "pow_required": true,
+  "turnstile_required": true,
+  "pow_bits": 16,
+  "pow_k": 16,
+  "pow_memory_kib": 2048,
+  "max_quantity": 4,
+  "offer_ttl_s": 600,
+  "pay_deadline_s": 300,
+  "max_promotion_rounds": 6,
+  "sybil_rules": [
+    {
+      "id": "device",
+      "kind": "max_per_device",
+      "limit": 2
+    },
+    {
+      "id": "payment",
+      "kind": "max_per_payment",
+      "limit": 2
+    },
+    {
+      "id": "fresh",
+      "kind": "min_account_age_s",
+      "value": 86400
+    }
+  ],
+  "drand_chain": "52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971",
+  "drand_round": 32772062,
+  "drand_round_due_at": "2026-10-04T13:12:30Z",
+  "config_hash": "e1264bbea72cbf931a3950d4e32964ea476bc35573926922cc779e05aa75f3d8",
+  "phase": "scheduled",
+  "tiers": [
+    {
+      "tier_id": "gold",
+      "name": "Gold",
+      "price_paise": 450000,
+      "capacity": 300
+    },
+    {
+      "tier_id": "silver",
+      "name": "Silver",
+      "price_paise": 250000,
+      "capacity": 900
+    },
+    {
+      "tier_id": "bronze",
+      "name": "Bronze",
+      "price_paise": 120000,
+      "capacity": 1800
+    }
+  ],
+  "counts": {
+    "entries": 9000,
+    "eligible": null,
+    "excluded": null
+  },
+  "snapshot": null,
+  "server_time": "2026-10-04T12:55:00Z"
+}

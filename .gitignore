@@ -10,3 +10,28 @@ frontend/dist/
 *.log
 *.egg-info/
 *.py[cod]
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+# Env / secrets
+.env.*
+!.env.example
+# Logs
+npm-debug.log*
+# Tool artifacts
+.vite/
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+# Local audit, planning and superseded reference documents
+/docs/adversarial/
+/docs/superpowers/
+/docs/fair-drop-critique.md
+/docs/fair-drop-research.md
+/.superpowers/
+/Fair Drop — Three-Person Build Plan.pdf

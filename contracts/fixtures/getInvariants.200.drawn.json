@@ -1,0 +1,25 @@
+{
+  "tiers": [
+    {
+      "tier_id": "gold",
+      "held": 300,
+      "active_offer_units": 300,
+      "capacity": 300
+    },
+    {
+      "tier_id": "silver",
+      "held": 900,
+      "active_offer_units": 900,
+      "capacity": 900
+    },
+    {
+      "tier_id": "bronze",
+      "held": 1800,
+      "active_offer_units": 1800,
+      "capacity": 1800
+    }
+  ],
+  "oversell": 0,
+  "held_mismatch": 0,
+  "double_redemption": 0
+}

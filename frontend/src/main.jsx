@@ -5,6 +5,10 @@ import App from './App.jsx';
 import './styles/global.css';
 import './styles/concert.css';
 
+if (import.meta.env.VITE_MSW === '1') {
+  await (await import('./api/mocks.js')).start();
+}
+
 createRoot(document.getElementById('root')).render(
   <HashRouter>
     <App />
