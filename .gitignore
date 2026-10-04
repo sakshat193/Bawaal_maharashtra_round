@@ -9,3 +9,4 @@ frontend/dist/
 .playwright-mcp/
 *.log
 *.egg-info/
+*.py[cod]

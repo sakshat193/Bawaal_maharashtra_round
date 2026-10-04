@@ -1,8 +1,8 @@
 import VenueCanvas from './VenueCanvas.jsx';
 import { Pill } from './Poster.jsx';
-import { CAPACITY } from './data.js';
 import { FlapString } from '../../components/Flap.jsx';
 import { TicketCard } from './Home.jsx';
+import OfferPayment from '../../components/OfferPayment.jsx';
 
 export function BuyBar({ buy, stickyMobile = true }) {
   if (!buy) return null;
@@ -39,7 +39,7 @@ function TierList({ st, compact }) {
 }
 
 export function Event({ st }) {
-  const { S, con: ev, tiers, sel, sold, actions, buy } = st;
+  const { S, con: ev, tiers, sel, sold, actions, buy, apiDrop, apiDropError, apiEntryError, capacity } = st;
   return (
     <div className="fade-in" data-screen="event" style={{ paddingBottom: 40 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 0 16px' }}>
@@ -48,7 +48,10 @@ export function Event({ st }) {
       </div>
       <div className="c-split">
         <div className="c-sticky">
-          <VenueCanvas mode="event" tier={S.tier} sold={sold} onPick={actions.pickTier} controls>
+          <VenueCanvas mode="event" tier={sel?.visualId} sold={sold} onPick={visualId => {
+            const layer = tiers.find(tier => tier.visualId === visualId);
+            if (layer) actions.pickTier(layer.id);
+          }} controls>
             <div style={{ position: 'absolute', top: 18, left: 20, display: 'flex', flexDirection: 'column', gap: 4, pointerEvents: 'none' }}>
               <span style={{ fontSize: 13, fontWeight: 600 }}>{ev.venue}</span>
               <span style={{ fontSize: 12, color: 'var(--ink3)' }}>Drag to rotate · scroll or pinch to zoom · tap a section</span>
@@ -70,13 +73,24 @@ export function Event({ st }) {
           <Pill d={ev} />
           <div style={{ fontFamily: 'var(--display)', fontWeight: 900, fontSize: 'clamp(60px,7vw,96px)', lineHeight: .84, textTransform: 'uppercase', paddingTop: 16 }}>{ev.artist}</div>
           <div style={{ fontSize: 17, lineHeight: 1.5, color: 'var(--ink2)', paddingTop: 14 }}>{ev.tag}<br />{ev.dateLong} · {ev.venue}, {ev.city}</div>
-          <div style={{ marginTop: 28 }}><BuyBar buy={buy} /></div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '36px 0 12px' }}>
             <h2 className="c-h2" style={{ fontSize: 30 }}>Choose a section</h2>
-            <span style={{ fontSize: 13, color: 'var(--ink3)' }}>{CAPACITY.toLocaleString('en-US')} capacity</span>
+            <span style={{ fontSize: 13, color: 'var(--ink3)' }}>{capacity.toLocaleString('en-US')} capacity</span>
           </div>
+          {!apiDrop && <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--ink3)' }}>Three-layer preview · live ticket selection requires an active drop.</p>}
           <TierList st={st} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 0' }}>
+            <span style={{ fontSize: 16, color: '#D6D5E0' }}>Tickets</span>
+            <div style={{ display: 'flex', alignItems: 'center', border: '1px solid rgba(255,255,255,.12)', borderRadius: 3 }}>
+              <button aria-label="Fewer tickets" onClick={() => actions.qty(-1)} disabled={S.qty <= 1} style={{ width: 48, height: 48, fontSize: 22, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
+              <span style={{ width: 44, textAlign: 'center', fontFamily: 'var(--display)', fontWeight: 800, fontSize: 30 }}>{S.qty}</span>
+              <button aria-label="More tickets" onClick={() => actions.qty(1)} disabled={S.qty >= (apiDrop?.max_quantity || 4)} style={{ width: 48, height: 48, fontSize: 22, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
+            </div>
+          </div>
+          <div style={{ marginTop: 8 }}><BuyBar buy={buy} /></div>
+          {apiDropError && <p role="alert" style={{ color: '#FDA4AF', lineHeight: 1.5, marginTop: 12 }}>{apiDropError}</p>}
+          {apiEntryError && <p role="alert" style={{ color: '#FDA4AF', lineHeight: 1.5, marginTop: 8 }}>{apiEntryError}</p>}
 
           <div className="c-facts" style={{ marginTop: 28 }}>
             {[['Doors', ev.doors], ['Show', ev.show], ['Age', ev.age], ['Limit', '4 per person'], ['Tickets', 'Mobile only'], ['Resale', 'Face value only']].map(([k, v]) => <div key={k}><span>{k}</span><span>{v}</span></div>)}
@@ -166,14 +180,6 @@ export function Turn({ st }) {
       <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         <div className="only-d" style={{ paddingBottom: 24 }}><TurnHead ev={ev} hold={hold} /></div>
         <TierList st={st} compact />
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 0' }}>
-          <span style={{ fontSize: 16, color: '#D6D5E0' }}>Tickets</span>
-          <div style={{ display: 'flex', alignItems: 'center', border: '1px solid rgba(255,255,255,.12)', borderRadius: 3 }}>
-            <button aria-label="Fewer" onClick={() => actions.qty(-1)} style={{ width: 48, height: 48, fontSize: 22, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
-            <span style={{ width: 44, textAlign: 'center', fontFamily: 'var(--display)', fontWeight: 800, fontSize: 30 }}>{S.qty}</span>
-            <button aria-label="More" onClick={() => actions.qty(1)} style={{ width: 48, height: 48, fontSize: 22, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
-          </div>
-        </div>
         <BuyBar buy={buy} />
         <div className="only-m" style={{ height: 110 }} />
       </div>
@@ -194,13 +200,11 @@ function TurnHead({ ev, hold }) {
 }
 
 export function Checkout({ st }) {
-  const { S, con: ev, sel, totals, hold, actions } = st;
-  const pays = [['card', 'Visa ending 4417'], ['wallet', 'Phone wallet']];
+  const { con: ev, actions } = st;
   return (
     <div className="fade-in" data-screen="checkout" style={{ maxWidth: 1040, margin: '0 auto', paddingTop: 28 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <button className="link-back" onClick={actions.backToTurn}>← Back to seats</button>
-        <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--amber-t)', fontVariantNumeric: 'tabular-nums' }}>Seats held for {hold.str}</span>
       </div>
       <h1 className="c-title" style={{ padding: '28px 0' }}>Checkout</h1>
       <div className="c-two">
@@ -209,26 +213,11 @@ export function Checkout({ st }) {
             <span style={{ fontFamily: 'var(--display)', fontWeight: 900, fontSize: 'clamp(40px,4.5vw,56px)', lineHeight: .88, textTransform: 'uppercase', color: '#fff' }}>{ev.artist}</span>
             <span style={{ fontSize: 15, color: 'rgba(255,255,255,.88)' }}>{ev.dateLong} · {ev.venue}, {ev.city}</span>
           </div>
-          <div style={{ marginTop: 18 }}>
-            <div className="kv" style={{ fontSize: 16 }}><span>{S.qty} × {sel.name}</span><span>{totals.subtotal}</span></div>
-            <div className="kv" style={{ fontSize: 16 }}><span>Service fee</span><span>{totals.fees}</span></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '18px 0' }}><span style={{ fontWeight: 600 }}>Total</span><span style={{ fontFamily: 'var(--display)', fontWeight: 800, fontSize: 44 }}>{totals.total}</span></div>
-          </div>
+          <p style={{ marginTop: 18, color: 'var(--ink2)', lineHeight: 1.6 }}>
+            Your ticket and total are verified before payment.
+          </p>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', padding: 26, background: '#101017', border: '1px solid var(--line)', borderRadius: 4 }}>
-          <div className="c-kicker" style={{ paddingBottom: 12 }}>Pay with</div>
-          {pays.map(([id, label]) => {
-            const on = S.pay === id;
-            return (
-              <button key={id} onClick={() => actions.setPay(id)} style={{ display: 'flex', alignItems: 'center', gap: 14, minHeight: 58, padding: '0 16px', marginBottom: 8, borderRadius: 3, border: `1px solid ${on ? '#FBBF24' : 'rgba(255,255,255,.12)'}`, background: on ? 'rgba(245,158,11,.08)' : 'transparent' }}>
-                <span style={{ width: 16, height: 16, borderRadius: '50%', border: `1.5px solid ${on ? '#FBBF24' : 'rgba(255,255,255,.3)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{on && <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#FBBF24' }} />}</span>
-                <span style={{ fontSize: 16 }}>{label}</span>
-              </button>
-            );
-          })}
-          <div style={{ fontSize: 14, lineHeight: 1.5, color: 'var(--ink3)', padding: '12px 0 22px' }}>Tickets go to sam.r@mail.com and to My tickets. Face-value resale only.</div>
-          <button className="btn btn-amber" onClick={actions.pay} style={{ minHeight: 60 }}>Pay {totals.total}</button>
-        </div>
+        <OfferPayment demoMode={st.paymentTest} />
       </div>
     </div>
   );

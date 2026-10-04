@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CONCERTS, TIERS, CITIES, describe, dur, money } from './data.js';
+import { apiRequest } from '../../api/client.js';
+import { CONCERTS, TIERS, CITIES, CAPACITY, describe, dur, money } from './data.js';
 
 /*
  * Single client-side state machine for the ticketing flow.
@@ -32,11 +33,13 @@ export const soldOf = s => {
   return m;
 };
 
-export function useConcertStore({ queueSpeed = 1, humanChecks = 'normal' } = {}) {
+export function useConcertStore({ queueSpeed = 1, humanChecks = 'normal', dropId = '', paymentTest = false } = {}) {
   const [S, setS] = useState(() => ({
     anchor: Date.now(), phase: 'home', tab: 'home', cid: 'halcyon', tier: null, saved: { mara: true }, tickets: [],
     queue: null, check: null, holdEnd: 0, qty: 2, pay: 'card', unread: true, city: CITIES[0], feed: [],
-    ...load(), sheet: null, notif: false, q: '', genre: 'All', how: false
+    apiDrop: null, apiDropError: '', apiEntryBusy: false, apiEntryError: '', entryId: '',
+    ...load(), sheet: null, notif: false, q: '', genre: 'All', how: false,
+    tier: load().tier || TIERS[0].id,
   }));
   const [now, setNow] = useState(Date.now());
   const [toast, setToast] = useState('');
@@ -47,6 +50,29 @@ export function useConcertStore({ queueSpeed = 1, humanChecks = 'normal' } = {})
 
   const set = useCallback(patch => setS(s => { const n = { ...s, ...(typeof patch === 'function' ? patch(s) : patch) }; persist(n); return n; }), []);
   const say = useCallback(m => { setToast(m); clearTimeout(toastT.current); toastT.current = setTimeout(() => setToast(''), 2200); }, []);
+
+  useEffect(() => {
+    if (!dropId) {
+      set({ apiDrop: null, apiDropError: 'No live drop is configured.' });
+      return undefined;
+    }
+    let active = true;
+    apiRequest(`/api/drops/${encodeURIComponent(dropId)}`)
+      .then(drop => {
+        if (!active) return;
+        set(current => ({
+          apiDrop: drop,
+          apiDropError: '',
+          tier: drop.tiers.some(tier => tier.tier_id === current.tier)
+            ? current.tier : (drop.tiers[0]?.tier_id || null),
+          qty: Math.min(current.qty, drop.max_quantity || 4),
+        }));
+      })
+      .catch(error => {
+        if (active) set({ apiDrop: null, apiDropError: error.message || 'Could not load the drop.' });
+      });
+    return () => { active = false; };
+  }, [dropId, set]);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -88,21 +114,59 @@ export function useConcertStore({ queueSpeed = 1, humanChecks = 'normal' } = {})
 
   const go = useCallback((phase, extra) => { set({ phase, sheet: null, notif: false, ...extra }); scrollTop(); }, [set]);
 
+  const registerEntry = useCallback(async () => {
+    set({ apiEntryBusy: true, apiEntryError: '' });
+    try {
+      if (!dropId) throw new Error('This checkout is not connected to a live drop.');
+      let token = '';
+      try { token = sessionStorage.getItem('fairdrop.identity') || ''; } catch { /* unavailable */ }
+      if (!token) throw new Error('Sign in before entering this drop.');
+
+      const current = ref.current;
+      const drop = current.apiDrop || await apiRequest(`/api/drops/${encodeURIComponent(dropId)}`);
+      if (drop.phase !== 'open') throw new Error('Registration is not open for this drop.');
+      if (drop.pow_required || drop.turnstile_required) {
+        throw new Error('This drop requires a proof challenge that is not available in this frontend yet.');
+      }
+      const tier = drop.tiers.find(item => item.tier_id === current.tier);
+      if (!tier) throw new Error('Choose a ticket section before entering.');
+
+      const entry = await apiRequest(`/api/drops/${encodeURIComponent(dropId)}/entries`, {
+        method: 'POST',
+        token,
+        body: { tier_id: tier.tier_id, quantity: Math.min(current.qty, drop.max_quantity || 4) },
+      });
+      sessionStorage.setItem('fairdrop.drop_id', dropId);
+      sessionStorage.setItem('fairdrop.entry_id', entry.entry_id);
+      set({ apiDrop: drop, apiDropError: '', entryId: entry.entry_id, check: null, phase: 'checkout', holdEnd: 0 });
+      scrollTop();
+    } catch (error) {
+      set({ apiEntryError: error.message || 'Could not enter this drop.' });
+      throw error;
+    } finally {
+      set({ apiEntryBusy: false });
+    }
+  }, [dropId, set]);
+
   const checkPass = useCallback(() => {
     set(s => ({ check: { ...s.check, status: 'ok', msg: 'Thanks, you’re verified.' } }));
-    setTimeout(() => {
+    setTimeout(async () => {
       const c = ref.current.check; if (!c) return;
       if (c.mode === 'gate') {
-        const tot = 3600 + Math.floor(Math.random() * 1400);
-        set({ check: null, phase: 'queue', feed: [], queue: { ahead: tot, total: tot, behind: 9800 + Math.floor(Math.random() * 4000), active: 0, next: 7 + Math.random() * 5, checks: 0 } });
-        scrollTop();
+        try {
+          await registerEntry();
+        } catch (error) {
+          set({ check: null });
+          say(error.message || 'Could not enter this drop.');
+        }
       } else set({ check: null });
     }, 700);
-  }, [set]);
+  }, [set, registerEntry, say]);
   const checkFail = useCallback(text => set(s => ({ check: { ...newCheck(s.check.mode, s.check.type, text), deadline: s.check.deadline, bad: (s.check.bad || 0) + 1 } })), [set]);
 
   const actions = useMemo(() => ({
     go,
+    enterPaymentTest: () => go('checkout'),
     setTab: id => { set(s => ({ tab: id, phase: s.phase === 'queue' ? 'queue' : 'home', sheet: null })); scrollTop(); },
     openSheet: id => set({ sheet: id, notif: false }),
     closeOverlays: () => set({ sheet: null, notif: false }),
@@ -111,10 +175,14 @@ export function useConcertStore({ queueSpeed = 1, humanChecks = 'normal' } = {})
     setQuery: q => set({ q }),
     setGenre: genre => set({ genre }),
     toggleSave: id => { const v = !ref.current.saved[id]; set(s => ({ saved: { ...s.saved, [id]: v } })); say(v ? 'Saved. We’ll remind you before sales open.' : 'Removed from saved'); },
-    viewEvent: id => go('event', { cid: id, tier: null, how: false }),
+    viewEvent: id => go('event', {
+      cid: id,
+      tier: ref.current.apiDrop?.tiers?.[0]?.tier_id || TIERS[0].id,
+      how: false,
+    }),
     pickTier: tier => set({ tier }),
     toggleHow: () => set(s => ({ how: !s.how })),
-    joinQueue: () => set({ check: newCheck('gate', 'slide') }),
+    joinQueue: () => registerEntry().catch(error => say(error.message || 'Could not enter this drop.')),
     waitlist: () => say('You’re on the waitlist. We’ll message you if seats open.'),
     leaveQueue: () => go('event', { queue: null, check: null }),
     slide: v => set(s => (s.check && s.check.status !== 'ok' ? { check: { ...s.check, val: v, msg: '' } } : {})),
@@ -131,7 +199,7 @@ export function useConcertStore({ queueSpeed = 1, humanChecks = 'normal' } = {})
     },
     swapCheck: () => set(s => ({ check: { ...newCheck(s.check.mode, s.check.type === 'slide' ? 'tap' : 'slide'), deadline: s.check.deadline } })),
     cancelCheck: () => set({ check: null }),
-    qty: d => set(s => ({ qty: Math.max(1, Math.min(4, s.qty + d)) })),
+    qty: d => set(s => ({ qty: Math.max(1, Math.min(s.apiDrop?.max_quantity || 4, s.qty + d)) })),
     setPay: pay => set({ pay }),
     toCheckout: () => go('checkout'),
     backToTurn: () => go('turn'),
@@ -149,31 +217,59 @@ export function useConcertStore({ queueSpeed = 1, humanChecks = 'normal' } = {})
     },
     toTickets: () => go('home', { tab: 'tickets' }),
     goHome: () => go('home', { tab: 'home', queue: null })
-  }), [go, set, say, checkPass, checkFail]);
+  }), [go, set, say, checkPass, checkFail, registerEntry]);
 
   // derived
   const ctx = { now, anchor: S.anchor, saved: S.saved };
   const con = describe(conOf(S), ctx);
   const sold = soldOf(S);
-  const tiers = TIERS.map(t => {
-    const left = Math.round(t.cap * (1 - sold[t.id]));
-    return { ...t, price: Math.round(con.from * t.mult), priceFmt: '$' + Math.round(con.from * t.mult), left, leftFmt: left ? left.toLocaleString('en-US') + ' left' : 'Sold out', leftPct: Math.round((1 - sold[t.id]) * 100) + '%', on: S.tier === t.id };
+  const tiers = S.apiDrop?.tiers?.length ? S.apiDrop.tiers.map((tier, index) => ({
+    ...TIERS[index % TIERS.length],
+    visualId: TIERS[index % TIERS.length].id,
+    id: tier.tier_id,
+    name: tier.name,
+    price: tier.price_paise / 100,
+    price_paise: tier.price_paise,
+    priceFmt: new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(tier.price_paise / 100),
+    left: tier.capacity,
+    leftFmt: `${tier.capacity.toLocaleString('en-IN')} capacity`,
+    leftPct: '100%',
+    on: S.tier === tier.tier_id,
+  })) : TIERS.map(tier => {
+    const left = Math.round(tier.cap * (1 - sold[tier.id]));
+    return {
+      ...tier,
+      visualId: tier.id,
+      price: Math.round(con.from * tier.mult),
+      priceFmt: '$' + Math.round(con.from * tier.mult),
+      left,
+      leftFmt: `${left.toLocaleString('en-US')} preview seats`,
+      leftPct: Math.round((1 - sold[tier.id]) * 100) + '%',
+      on: S.tier === tier.id,
+    };
   });
-  const sel = tiers.find(t => t.on) || tiers[1];
-  const subtotal = sel.price * S.qty, fees = 8.5 * S.qty;
+  const selectedTiers = tiers.map(t => {
+    if (S.apiDrop) return t;
+    return t;
+  });
+  const sel = selectedTiers.find(t => t.on) || selectedTiers[0];
+  const subtotal = (sel?.price || 0) * S.qty, fees = 8.5 * S.qty;
   const holdLeft = Math.max(0, Math.ceil((S.holdEnd - now) / 1000));
 
   let buy = null;
   if (S.phase === 'event') {
-    if (con.canBuy) buy = { label: S.tier ? sel.name : 'Tickets from', value: S.tier ? sel.priceFmt : con.fromFmt, cta: 'Join the queue', tone: 'violet', onClick: actions.joinQueue };
-    else if (con.status === 'soon') buy = { label: 'On sale in', value: dur(S.anchor + con.opens - now), cta: con.saved ? 'Reminder set' : 'Remind me', tone: 'violet', onClick: () => actions.toggleSave(con.id) };
-    else buy = { label: 'Sold out', value: 'Waitlist', cta: 'Join the waitlist', tone: 'muted', onClick: actions.waitlist };
+    if (paymentTest) buy = { label: 'Test checkout', value: 'Razorpay Test Mode · ₹1', cta: 'Continue to test payment', tone: 'amber', disabled: !S.tier, onClick: actions.enterPaymentTest };
+    else if (!dropId || !S.apiDrop) buy = { label: 'Live tickets', value: S.apiDropError || 'Connecting…', cta: 'Unavailable', tone: 'muted', disabled: true };
+    else if (S.apiDrop.phase !== 'open') buy = { label: 'Registration', value: S.apiDrop.phase, cta: 'Closed', tone: 'muted', disabled: true };
+    else if (S.apiDrop.pow_required || S.apiDrop.turnstile_required) buy = { label: 'Registration', value: 'Proof challenge required', cta: 'Unavailable', tone: 'muted', disabled: true };
+    else buy = { label: S.tier ? sel?.name : 'Choose a section', value: S.tier ? sel?.priceFmt : '', cta: S.apiEntryBusy ? 'Entering…' : 'Enter the draw', tone: 'violet', disabled: !S.tier || S.apiEntryBusy, onClick: actions.joinQueue };
   } else if (S.phase === 'turn') {
-    buy = { label: `${S.qty} × ${sel.name}`, value: money(subtotal + fees), cta: 'Continue', tone: 'amber', disabled: !sel.left, onClick: actions.toCheckout };
+    buy = { label: `${S.qty} × ${sel?.name || 'ticket'}`, value: money(subtotal + fees), cta: 'Continue', tone: 'amber', disabled: !sel?.left, onClick: actions.toCheckout };
   }
 
   return {
-    S, now, toast, actions, con, sold, tiers, sel, buy, prog: progOf(S),
+    S, now, toast, actions, con, sold, tiers: selectedTiers, sel, buy, prog: progOf(S), apiDrop: S.apiDrop, apiDropError: S.apiDropError, paymentTest,
+    capacity: S.apiDrop?.tiers?.reduce((sum, tier) => sum + tier.capacity, 0) || CAPACITY,
     describe: c => describe(c, ctx),
     totals: { subtotal: money(subtotal), fees: money(fees), total: money(subtotal + fees) },
     hold: { left: holdLeft, str: String(Math.floor(holdLeft / 60)).padStart(2, '0') + ':' + String(holdLeft % 60).padStart(2, '0') },

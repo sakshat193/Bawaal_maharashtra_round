@@ -17,7 +17,6 @@ export function createVenue(el, { reduced = false, onPick = () => {} } = {}) {
   const P = (r, a, y) => new T.Vector3(Math.sin(a) * r * 1.3, y, -Math.cos(a) * r);
   const TD = {
     lower: { r0: 2.7, r1: 3.7, y0: 0.12, y1: 0.95, a0: 0.62, n: 14, rows: 4, per: 64 },
-    club: { r0: 3.82, r1: 4.1, y0: 1.05, y1: 1.18, a0: 0.62, n: 12, rows: 1, per: 70 },
     upper: { r0: 4.25, r1: 5.5, y0: 1.32, y1: 2.55, a0: 0.42, n: 18, rows: 5, per: 86 }
   };
   const COL = {}; TIERS.forEach(t => (COL[t.id] = new T.Color(t.color)));
