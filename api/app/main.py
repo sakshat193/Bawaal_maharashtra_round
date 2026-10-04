@@ -42,7 +42,7 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Fair Drop", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="Fair Drop", version="0.2.0", lifespan=lifespan)
     @app.get("/health", include_in_schema=False)
     def health():
         return {"ok": True}

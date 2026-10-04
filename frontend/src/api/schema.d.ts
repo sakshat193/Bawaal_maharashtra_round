@@ -413,7 +413,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["Draw"];
                     };
                 };
                 404: components["responses"]["Error"];
@@ -481,6 +481,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/offers/{offer_id}/checkout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a Razorpay order for the caller's pending offer */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    offer_id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Checkout"];
+                    };
+                };
+                403: components["responses"]["Error"];
+                404: components["responses"]["Error"];
+                /** @description not_payment_pending */
+                409: components["responses"]["Error"];
+                /** @description payment_unavailable */
+                503: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/offers/{offer_id}/pay": {
         parameters: {
             query?: never;
@@ -490,7 +534,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Mock payment result, success or fail */
+        /** Submit mock result or verified Razorpay payment identifiers */
         post: {
             parameters: {
                 query?: never;
@@ -502,11 +546,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": {
-                        order_id: string;
-                        /** @enum {string} */
-                        result: "success" | "fail";
-                    };
+                    "application/json": components["schemas"]["MockPayment"] | components["schemas"]["RazorpayPayment"];
                 };
             };
             responses: {
@@ -522,7 +562,7 @@ export interface paths {
                         };
                     };
                 };
-                /** @description payment_window_closed (refund: true) | not_payment_pending */
+                /** @description payment_window_closed (refund: true) | not_payment_pending | payment_unavailable */
                 409: components["responses"]["Error"];
             };
         };
@@ -595,7 +635,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["Invariants"];
                     };
                 };
             };
@@ -848,7 +888,7 @@ export interface components {
         /** @enum {string} */
         EntryStatus: "registered" | "excluded" | "waitlisted" | "offered" | "payment_pending" | "confirmed" | "expired" | "declined" | "payment_failed" | "not_selected";
         /** @enum {string} */
-        ErrorCode: "window_closed" | "entry_exists_different_terms" | "unknown_tier" | "quantity_exceeds_max" | "turnstile_failed" | "offer_expired" | "offer_not_yours" | "already_redeemed_other_order" | "not_offered" | "payment_window_closed" | "not_payment_pending";
+        ErrorCode: "window_closed" | "entry_exists_different_terms" | "unknown_tier" | "quantity_exceeds_max" | "turnstile_failed" | "offer_expired" | "offer_not_yours" | "already_redeemed_other_order" | "not_offered" | "payment_window_closed" | "not_payment_pending" | "payment_unavailable";
         /** @enum {string} */
         TransportError: "unauthorized" | "invalid_request" | "not_found" | "rate_limited" | "conflict";
         Error: {
@@ -1039,6 +1079,65 @@ export interface components {
                 /** Format: date-time */
                 pay_deadline?: string | null;
             } | null;
+        };
+        Draw: {
+            /** Format: uuid */
+            drop_id: string;
+            round: number;
+            signature: string;
+            randomness: string;
+            relays: string[];
+            /** Format: date-time */
+            drawn_at: string;
+            ranked_entry_ids: string[];
+            allocation: {
+                entry_id: string;
+                tier_id: string;
+                quantity: number;
+                round: number;
+                /** Format: uuid */
+                offer_id: string;
+            }[];
+        };
+        Invariants: {
+            tiers: {
+                tier_id: string;
+                held: number;
+                active_offer_units: number;
+                capacity: number;
+            }[];
+            oversell: number;
+            held_mismatch: number;
+            double_redemption: number;
+        };
+        Checkout: {
+            /** @constant */
+            provider: "razorpay";
+            key_id: string;
+            provider_order_id: string;
+            amount_paise: number;
+            /** @constant */
+            currency: "INR";
+            /** Format: date-time */
+            pay_deadline: string;
+        };
+        MockPayment: {
+            order_id: string;
+            /**
+             * @default mock
+             * @constant
+             */
+            provider: "mock";
+            /** @enum {string} */
+            result: "success" | "fail";
+        };
+        RazorpayPayment: {
+            order_id: string;
+            /** @constant */
+            provider: "razorpay";
+            razorpay_order_id: string;
+            razorpay_payment_id: string;
+            razorpay_signature: string;
         };
     };
     responses: {

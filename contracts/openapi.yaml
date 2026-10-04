@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Fair Drop API
   # Bump on every change under contracts/; needs approval from the other three.
-  version: 0.1.0
+  version: 0.2.0
   description: |
     Skeleton copied from the four-person build plan. Owners per route are in
     x-owner. Every private route authenticates with the platform identity JWT
@@ -46,7 +46,7 @@ components:
       enum: [window_closed, entry_exists_different_terms, unknown_tier,
              quantity_exceeds_max, turnstile_failed, offer_expired, offer_not_yours,
              already_redeemed_other_order, not_offered, payment_window_closed,
-             not_payment_pending]
+             not_payment_pending, payment_unavailable]
     TransportError:
       type: string
       enum: [unauthorized, invalid_request, not_found, rate_limited, conflict]
@@ -248,6 +248,76 @@ components:
             expires_at: { type: string, format: date-time }
             pay_deadline: { type: [string, "null"], format: date-time }
 
+    Draw:
+      type: object
+      required: [drop_id, round, signature, randomness, relays, drawn_at, ranked_entry_ids, allocation]
+      properties:
+        drop_id: { type: string, format: uuid }
+        round: { type: integer, minimum: 1 }
+        signature: { type: string }
+        randomness: { type: string }
+        relays: { type: array, items: { type: string } }
+        drawn_at: { type: string, format: date-time }
+        ranked_entry_ids: { type: array, items: { type: string } }
+        allocation:
+          type: array
+          items:
+            type: object
+            required: [entry_id, tier_id, quantity, round, offer_id]
+            properties:
+              entry_id: { type: string }
+              tier_id: { type: string }
+              quantity: { type: integer, minimum: 1, maximum: 4 }
+              round: { type: integer, minimum: 0 }
+              offer_id: { type: string, format: uuid }
+
+    Invariants:
+      type: object
+      required: [tiers, oversell, held_mismatch, double_redemption]
+      properties:
+        tiers:
+          type: array
+          items:
+            type: object
+            required: [tier_id, held, active_offer_units, capacity]
+            properties:
+              tier_id: { type: string }
+              held: { type: integer, minimum: 0 }
+              active_offer_units: { type: integer, minimum: 0 }
+              capacity: { type: integer, minimum: 0 }
+        oversell: { type: integer, minimum: 0 }
+        held_mismatch: { type: integer, minimum: 0 }
+        double_redemption: { type: integer, minimum: 0 }
+
+    Checkout:
+      type: object
+      required: [provider, key_id, provider_order_id, amount_paise, currency, pay_deadline]
+      properties:
+        provider: { type: string, const: razorpay }
+        key_id: { type: string }
+        provider_order_id: { type: string }
+        amount_paise: { type: integer, minimum: 0 }
+        currency: { type: string, const: INR }
+        pay_deadline: { type: string, format: date-time }
+
+    MockPayment:
+      type: object
+      required: [order_id, result]
+      properties:
+        order_id: { type: string }
+        provider: { type: string, const: mock, default: mock }
+        result: { type: string, enum: [success, fail] }
+
+    RazorpayPayment:
+      type: object
+      required: [order_id, provider, razorpay_order_id, razorpay_payment_id, razorpay_signature]
+      properties:
+        order_id: { type: string }
+        provider: { type: string, const: razorpay }
+        razorpay_order_id: { type: string }
+        razorpay_payment_id: { type: string }
+        razorpay_signature: { type: string }
+
   responses:
     Error:
       description: Error
@@ -390,7 +460,7 @@ paths:
       summary: drand evidence, ranked entry_ids, initial allocation
       parameters: [{ name: drop_id, in: path, required: true, schema: { type: string, format: uuid } }]
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: object } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Draw" } } } }
         "404": { $ref: "#/components/responses/Error" }
 
   /api/offers/{offer_id}/redeem:
@@ -422,22 +492,33 @@ paths:
         "403": { description: offer_not_yours, $ref: "#/components/responses/Error" }
         "409": { description: "offer_expired | already_redeemed_other_order | not_offered", $ref: "#/components/responses/Error" }
 
+  /api/offers/{offer_id}/checkout:
+    post:
+      x-owner: member-3
+      security: [{ identityJwt: [] }]
+      summary: Create a Razorpay order for the caller's pending offer
+      parameters: [{ name: offer_id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Checkout" } } } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { description: not_payment_pending, $ref: "#/components/responses/Error" }
+        "503": { description: payment_unavailable, $ref: "#/components/responses/Error" }
+
   /api/offers/{offer_id}/pay:
     post:
       x-owner: member-3
       security: [{ identityJwt: [] }]
-      summary: Mock payment result, success or fail
+      summary: Submit mock result or verified Razorpay payment identifiers
       parameters: [{ name: offer_id, in: path, required: true, schema: { type: string, format: uuid } }]
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [order_id, result]
-              properties:
-                order_id: { type: string }
-                result: { type: string, enum: [success, fail] }
+              oneOf:
+                - { $ref: "#/components/schemas/MockPayment" }
+                - { $ref: "#/components/schemas/RazorpayPayment" }
       responses:
         "200":
           description: OK
@@ -446,7 +527,7 @@ paths:
               schema:
                 type: object
                 properties: { status: { type: string, enum: [confirmed, payment_failed] } }
-        "409": { description: "payment_window_closed (refund: true) | not_payment_pending", $ref: "#/components/responses/Error" }
+        "409": { description: "payment_window_closed (refund: true) | not_payment_pending | payment_unavailable", $ref: "#/components/responses/Error" }
 
   /api/offers/{offer_id}/decline:
     post:
@@ -466,7 +547,7 @@ paths:
       summary: held against capacity, duplicate counters
       parameters: [{ name: drop_id, in: path, required: true, schema: { type: string, format: uuid } }]
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: object } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Invariants" } } } }
 
   /api/admin/drops:
     post:
