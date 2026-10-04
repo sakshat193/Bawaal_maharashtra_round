@@ -144,13 +144,16 @@ def _invariant_summary(value: dict) -> dict:
             held_matches_active = False
         else:
             held_matches_active = held_matches_active and int(active) == held
+    double_redemption = next((value[key] for key in (
+        "double_redemption", "double_redemptions", "double_redeem_count", "entries_with_multiple_offers", "multiple_offers"
+    ) if key in value), None)
+    if isinstance(double_redemption, bool) or not isinstance(double_redemption, int) or double_redemption < 0:
+        raise RuntimeError("invariants must include a non-negative double_redemption counter")
     return {
         "held_within_capacity": held_ok,
         "held_matches_active_offers": held_matches_active,
         "oversell": int(value.get("oversell", value.get("oversell_count", oversell))),
-        "double_redemption": int(next((value[key] for key in (
-            "double_redemptions", "double_redeem_count", "entries_with_multiple_offers", "multiple_offers"
-        ) if key in value), 0)),
+        "double_redemption": double_redemption,
         "raw": value,
     }
 

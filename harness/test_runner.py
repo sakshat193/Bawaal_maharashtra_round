@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from harness.profiles import load_users
-from harness.runner import _solve_pow, _summarize
+from harness.runner import _invariant_summary, _solve_pow, _summarize
 from fairdrop_common import pow
 from harness import runner
 
@@ -53,3 +53,12 @@ def test_harness_leaves_time_for_the_whole_population(monkeypatch):
         asyncio.run(runner.run_harness("http://example.test", Path("unused"), Path("unused")))
     assert all((deadline - before).total_seconds() >= 179 for deadline in deadlines)
     assert difficulties == [4, 4, 4]
+
+
+def test_invariants_preserve_real_duplicate_counter():
+    value = {"tiers": [{"tier_id": "main", "held": 1, "capacity": 2, "active_offer_units": 1}],
+             "oversell": 0, "held_mismatch": 0, "double_redemption": 2}
+    assert _invariant_summary(value)["double_redemption"] == 2
+    del value["double_redemption"]
+    with pytest.raises(RuntimeError, match="double_redemption"):
+        _invariant_summary(value)
