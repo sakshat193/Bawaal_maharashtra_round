@@ -14,9 +14,11 @@ x-api-env: &api-env
   RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
   RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
   TIMESTAMP_BACKENDS: ${TIMESTAMP_BACKENDS:-ots}
-  TIMESTAMP_GIT_DIR: ${TIMESTAMP_GIT_DIR:-}
+  TIMESTAMP_GIT_DIR: ${TIMESTAMP_GIT_DIR:-/timestamps}
   TIMESTAMP_GIT_WEB_URL: ${TIMESTAMP_GIT_WEB_URL:-}
   RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+  # local demo only: the harness acts as the edge, so its X-Forwarded-For (synthetic subnets) is trusted
+  TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.16.0.0/12,192.168.0.0/16}
   CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
 
 services:
@@ -51,7 +53,7 @@ services:
     build: { context: ., dockerfile: api/Dockerfile }
     environment: *api-env
     ports: ["8000:8000"]
-    volumes: [./keys:/keys:ro]
+    volumes: [./keys:/keys:ro, "${TIMESTAMP_GIT_HOST_DIR:-./.timestamps}:/timestamps"]  # git witness clone
     depends_on:
       keys: { condition: service_completed_successfully }
       migrate: { condition: service_completed_successfully }

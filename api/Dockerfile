@@ -2,6 +2,8 @@
 FROM python:3.11-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+# Identity + bind-mount ownership for the git timestamp witness (GitCommit).
+RUN git config --system user.name "Fair Drop seal" && git config --system user.email "seal@fairdrop.invalid" && git config --system --add safe.directory '*'
 WORKDIR /srv
 COPY api/requirements.txt api/requirements.txt
 RUN pip install --no-cache-dir -r api/requirements.txt

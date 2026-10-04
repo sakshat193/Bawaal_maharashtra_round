@@ -25,7 +25,7 @@ from . import turnstile
 from .common import fence_key, load_drop
 from .keys import get_keys
 from .platform import Identity, current_identity
-from .ratelimit import client_ip, limit, via_trusted_proxy
+from .ratelimit import client_ip, limit, subnet_of, via_trusted_proxy
 
 router = APIRouter(tags=["entries"])
 
@@ -119,12 +119,13 @@ def create_entry(drop_id: uuid.UUID, body: EntryIn, request: Request, response: 
         # e/f. Risk facts from the verified token only; one entry per identity per drop.
         row = conn.execute(
             """INSERT INTO entries (entry_id, drop_id, identity_id, tier_id, quantity, account_created_at,
-                                    device_hash, payment_fingerprint, pow_issued_at, pow_nonces)
-               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                                    device_hash, payment_fingerprint, pow_issued_at, pow_nonces, client_subnet)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                ON CONFLICT (drop_id, identity_id) DO NOTHING
                RETURNING entry_id, drop_id, tier_id, quantity, accepted_at""",
             (entry_id, drop_id, ident.identity_id, body.tier_id, body.quantity, ident.account_created_at,
-             ident.device_hash, ident.payment_fingerprint, pow_issued_at, nonces)).fetchone()
+             ident.device_hash, ident.payment_fingerprint, pow_issued_at, nonces,
+             subnet_of(client_ip(request)))).fetchone()
         created = row is not None
         if not created:
             row = conn.execute(

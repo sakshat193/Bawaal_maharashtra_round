@@ -82,3 +82,15 @@ After `POST /api/admin/reset`, the demo drop opens about 10 s later through the 
 - For a large PoW drop, raise `DRAND_MARGIN_S`, or lower `pow_k` or `pow_memory_kib`.
 - Demo-size drops (hundreds of entries) seal in seconds.
 - Seeded drops don't need PoW (`pow_required=false`).
+
+## Git timestamp witness (`TIMESTAMP_BACKENDS=ots,git`)
+
+Used for the laptop demo (docker-compose). Render stays `ots` only: its free filesystem is ephemeral.
+
+1. Create a public GitHub repo and a fine-grained PAT limited to it (Contents: read and write). Never commit the token.
+2. `git clone https://x-access-token:<PAT>@github.com/<org>/<repo>.git .timestamps` (or set `TIMESTAMP_GIT_HOST_DIR`).
+3. In `.env`: `TIMESTAMP_BACKENDS=ots,git` and `TIMESTAMP_GIT_WEB_URL=https://github.com/<org>/<repo>`.
+4. Preflight: `docker compose exec api git -C /timestamps push --dry-run`, then rehearse one seal.
+
+Every backend must succeed, so a failed push blocks the draw until the scheduler retries.
+

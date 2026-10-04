@@ -247,6 +247,7 @@ components:
             status: { $ref: "#/components/schemas/OfferStatus" }
             expires_at: { type: string, format: date-time }
             pay_deadline: { type: [string, "null"], format: date-time }
+            order_id: { type: [string, "null"] }
 
     Draw:
       type: object
@@ -601,6 +602,26 @@ paths:
       parameters: [{ name: drop_id, in: path, required: true, schema: { type: string, format: uuid } }]
       responses:
         "200": { description: OK }
+
+  /api/admin/drops/{drop_id}/traffic:
+    get:
+      x-owner: member-2
+      security: [{ adminKey: [] }]
+      summary: Entries grouped by /24 (/48) subnet with device/payment spread. Admin hint only; never published or weighted.
+      parameters: [{ name: drop_id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: OK }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/admin/catalog:
+    post:
+      x-owner: member-2
+      security: [{ adminKey: [] }]
+      summary: Seed the demo catalog (same as scripts/seed_catalog.py). Idempotent; returns created/skipped/opened.
+      responses:
+        "200": { description: OK }
+        "401": { $ref: "#/components/responses/Error" }
 
   /api/admin/reset:
     post:

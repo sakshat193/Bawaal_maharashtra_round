@@ -7,18 +7,19 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from psycopg.rows import tuple_row
 
 from ..db import get_pool
 from ..config import get_settings
 from ..entry import Identity, current_identity
 from ..entry.admin_auth import require_admin
+from ..entry.evidence import IMMUTABLE
 from ..errors import ApiError
 from fairdrop_common.drand import fetch as fetch_drand, time_of
 from fairdrop_common._compat import canonical
 from fairdrop_common.rank import fcfs_order, lottery_order
-from .payments import PaymentProviderError, create_order, verify_payment
+from .payments import PaymentProviderError, create_order, refund_payment, verify_payment
 
 logger = logging.getLogger(__name__)
 
@@ -56,10 +57,10 @@ class _Transaction:
         self.transaction = transaction
 
     async def __aenter__(self):
-        self.transaction.__enter__()
+        await asyncio.to_thread(self.transaction.__enter__)
 
     async def __aexit__(self, *args):
-        return self.transaction.__exit__(*args)
+        return await asyncio.to_thread(self.transaction.__exit__, *args)
 
 
 class _Connection:
@@ -68,8 +69,9 @@ class _Connection:
         self.connection = connection
 
     async def execute(self, sql: str, params: tuple = ()) -> _Cursor:
+        # ponytail: thread hop per query; AsyncConnectionPool once dev/tests leave Windows' ProactorEventLoop
         cursor = self.connection.cursor(row_factory=tuple_row)
-        cursor.execute(sql, params)
+        await asyncio.to_thread(cursor.execute, sql, params)
         return _Cursor(cursor)
 
     def transaction(self) -> _Transaction:
@@ -98,15 +100,17 @@ async def _all(connection: Any, sql: str, params: tuple = ()) -> list[tuple]:
 @router.get("/drops/{drop_id}/me", operation_id="getMe")
 async def get_me(
     drop_id: uuid.UUID,
+    response: Response,
     identity: Identity = Depends(current_identity),
     connection: Any = Depends(conn),
 ) -> dict[str, Any]:
+    response.headers["Cache-Control"] = "private, no-store"  # per-user; /api/* is edge-cacheable
     row = await _one(
         connection,
         """SELECT d.phase, e.entry_id, e.tier_id, e.quantity, e.eligible,
                   e.exclusion_reason, r.rank,
                   o.offer_id, o.round, o.status, o.expires_at, o.pay_deadline,
-                  t.price_paise, d.closes_at
+                  t.price_paise, d.closes_at, o.order_id
              FROM drops d
              LEFT JOIN entries e ON e.drop_id = d.drop_id AND e.identity_id = %s
              LEFT JOIN ranks r ON r.drop_id = e.drop_id AND r.entry_id = e.entry_id
@@ -119,7 +123,7 @@ async def get_me(
         raise ApiError(404, "not_found")
     (phase, entry_id, tier_id, quantity, eligible, exclusion_reason, rank,
      offer_id, offer_round, offer_status, expires_at, pay_deadline,
-     price_paise, closes_at) = row
+     price_paise, closes_at, order_id) = row
     result: dict[str, Any] = {"phase": phase, "server_time": _now().isoformat().replace("+00:00", "Z"),
                               "entry": None, "offer": None}
     if entry_id is None:
@@ -159,6 +163,7 @@ async def get_me(
             "amount_paise": quantity * price_paise, "round": offer_round,
             "status": offer_status, "expires_at": expires_at.isoformat().replace("+00:00", "Z"),
             "pay_deadline": pay_deadline.isoformat().replace("+00:00", "Z") if pay_deadline else None,
+            "order_id": order_id,
         }
     return result
 
@@ -235,12 +240,12 @@ async def pay_offer(
         status, saved_order, deadline, quantity, drop_id, tier_id, owner_id = row
         if owner_id != identity.identity_id:
             raise ApiError(403, "offer_not_yours")
-        if status != "payment_pending" or saved_order != order_id:
+        if provider not in ("mock", "razorpay"):
+            raise ApiError(400, "invalid_request")
+        # A captured Razorpay payment can still arrive after the sweeper failed the offer; it must be refunded.
+        allowed = ("payment_pending", "payment_failed") if provider == "razorpay" else ("payment_pending",)
+        if status not in allowed or saved_order != order_id:
             raise ApiError(409, "not_payment_pending")
-        if deadline <= _now():
-            if result == "success":
-                raise ApiError(409, "payment_window_closed", refund=True)
-            raise ApiError(409, "payment_window_closed")
         if provider == "razorpay":
             provider_order_id = body.get("razorpay_order_id", "")
             payment_id = body.get("razorpay_payment_id", "")
@@ -258,8 +263,17 @@ async def pay_offer(
             except PaymentProviderError as exc:
                 raise ApiError(409, "payment_unavailable", message=str(exc)) from exc
             result = "success"
-        elif provider != "mock":
-            raise ApiError(400, "invalid_request")
+        if status == "payment_failed" or deadline <= _now():
+            if result != "success":
+                raise ApiError(409, "payment_window_closed")
+            if provider == "razorpay":
+                try:
+                    await refund_payment(payment_id=payment_id, amount_paise=amount[0])
+                except PaymentProviderError as exc:
+                    logger.exception("refund failed for late payment %s on offer %s", payment_id, offer_id)
+                    raise ApiError(503, "payment_unavailable", message=str(exc)) from exc
+                logger.info("refunded late payment %s on offer %s", payment_id, offer_id)
+            raise ApiError(409, "payment_window_closed", refund=True)
         if result == "success":
             await connection.execute(
                 "UPDATE offers SET status='confirmed', confirmed_at=clock_timestamp() WHERE offer_id=%s",
@@ -335,7 +349,13 @@ async def decline_offer(
 
 
 @router.get("/drops/{drop_id}/draw", operation_id="getDraw")
-async def get_draw(drop_id: uuid.UUID, connection: Any = Depends(conn)) -> dict[str, Any]:
+async def get_draw(drop_id: uuid.UUID, response: Response, connection: Any = Depends(conn)) -> dict[str, Any]:
+    body = await _draw_body(connection, drop_id)
+    response.headers["Cache-Control"] = IMMUTABLE  # set only on 200: draw rows commit atomically, so the first 200 is final
+    return body
+
+
+async def _draw_body(connection: Any, drop_id: uuid.UUID) -> dict[str, Any]:
     draw = await _one(connection,
         "SELECT drand_round,signature,randomness,relays,drawn_at FROM draws WHERE drop_id=%s", (drop_id,))
     if draw is None:
@@ -356,7 +376,8 @@ async def get_draw(drop_id: uuid.UUID, connection: Any = Depends(conn)) -> dict[
 
 
 @router.get("/drops/{drop_id}/invariants", operation_id="getInvariants")
-async def invariants(drop_id: uuid.UUID, connection: Any = Depends(conn)) -> dict[str, Any]:
+async def invariants(drop_id: uuid.UUID, response: Response, connection: Any = Depends(conn)) -> dict[str, Any]:
+    response.headers["Cache-Control"] = "public, max-age=2, s-maxage=2"
     tiers = await _all(connection,
         """SELECT t.tier_id,t.held,t.capacity,
                   COALESCE(sum(o.quantity) FILTER (WHERE o.status IN ('offered','payment_pending','confirmed')),0)
@@ -374,14 +395,24 @@ async def invariants(drop_id: uuid.UUID, connection: Any = Depends(conn)) -> dic
             "double_redemption": int(double_offers[0])}
 
 
+DRAW_WAIT_MAX_S = 20  # demo drops are due within seconds; longer waits get a 409
+
+
 @router.post("/admin/drops/{drop_id}/draw", operation_id="adminDraw")
 async def admin_draw(
     drop_id: uuid.UUID,
     _admin: Any = Depends(require_admin),
     connection: Any = Depends(conn),
 ) -> dict[str, Any]:
+    row = await _one(connection, "SELECT drand_round FROM drops WHERE drop_id=%s", (drop_id,))
+    if row is None:
+        raise ApiError(404, "not_found")
+    wait = time_of(row[0]) - datetime.now(timezone.utc).timestamp()
+    if wait > DRAW_WAIT_MAX_S:  # a held request looks hung; say when instead
+        due = datetime.fromtimestamp(time_of(row[0]), timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        raise ApiError(409, "draw_not_due", message=f"randomness round {row[0]} is published at {due}", due_at=due)
     await _draw_drop(connection, drop_id)
-    return await get_draw(drop_id, connection)
+    return await _draw_body(connection, drop_id)
 
 
 @router.get("/admin/drops/{drop_id}/outcomes", operation_id="adminOutcomes")
@@ -505,9 +536,13 @@ async def _sweep_once(connection: Any) -> None:
                 free = capacity - held
                 if free <= 0:
                     continue
-                max_round = await _one(connection,
-                    "SELECT COALESCE(max(round),0) FROM offers WHERE drop_id=%s AND tier_id=%s", (drop_id, tier_id))
-                round_number = max_round[0] + 1
+                # A promotion wave lasts one offer TTL from its first offer; releases inside it share the round.
+                latest = await _one(connection,
+                    """SELECT round, min(expires_at) > clock_timestamp() FROM offers
+                        WHERE drop_id=%s AND tier_id=%s GROUP BY round ORDER BY round DESC LIMIT 1""",
+                    (drop_id, tier_id))
+                last_round, wave_open = latest or (0, False)
+                round_number = last_round if last_round > 0 and wave_open else last_round + 1
                 if round_number > max_rounds:
                     continue
                 candidates = await _all(connection,
@@ -540,26 +575,44 @@ async def _sweep_once(connection: Any) -> None:
                 await connection.execute("UPDATE drops SET phase='settled' WHERE drop_id=%s", (drop_id,))
 
 
-async def background() -> None:
-    """Restart-safe draw and offer sweeper. Each iteration is idempotent."""
+@asynccontextmanager
+async def _pooled():
+    pool = get_pool()
+    raw = await asyncio.to_thread(pool.getconn)
+    try:
+        yield _Connection(raw)
+    finally:
+        await asyncio.to_thread(pool.putconn, raw)
+
+
+async def _draw_due(connection: Any) -> None:
+    # Only drops whose drand round is already published; a future round must not stall the sweeper.
+    sealed = await _all(connection,
+        """SELECT d.drop_id FROM drops d JOIN snapshots s USING(drop_id)
+            WHERE d.phase='sealed' AND s.timestamp_proof IS NOT NULL AND s.timestamped_at IS NOT NULL
+              AND s.timestamped_at < to_timestamp((d.drand_round - 1)*3 + 1692803367)
+              AND now() >= to_timestamp((d.drand_round - 1)*3 + 1692803367)""")
+    for (drop_id,) in sealed:
+        try:
+            await _draw_drop(connection, drop_id)
+        except Exception:
+            logger.exception("allocation draw failed for %s", drop_id)
+
+
+async def _loop(step: Any, label: str) -> None:
     while True:
         try:
-            with get_pool().connection() as raw_connection:
-                connection = _Connection(raw_connection)
-                sealed = await _all(connection,
-                    """SELECT d.drop_id FROM drops d JOIN snapshots s USING(drop_id)
-                        WHERE d.phase='sealed' AND s.timestamp_proof IS NOT NULL AND s.timestamped_at IS NOT NULL
-                          AND s.timestamped_at < to_timestamp((d.drand_round - 1)*3 + 1692803367)""")
-                for (drop_id,) in sealed:
-                    try:
-                        await _draw_drop(connection, drop_id)
-                    except Exception:
-                        logger.exception("allocation draw failed for %s", drop_id)
-                await _sweep_once(connection)
+            async with _pooled() as connection:
+                await step(connection)
         except asyncio.CancelledError:
             raise
         except Exception:
-            logger.exception("allocation background iteration failed")
+            logger.exception("allocation %s iteration failed", label)
         await asyncio.sleep(2)
+
+
+async def background() -> None:
+    """Restart-safe draw and offer sweeper, as independent loops. Each iteration is idempotent."""
+    await asyncio.gather(_loop(_draw_due, "draw"), _loop(_sweep_once, "sweep"))
 
 

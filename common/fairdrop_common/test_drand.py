@@ -97,6 +97,14 @@ class DrandFetchTests(unittest.TestCase):
         self.assertEqual(result, payload)
         sleep.assert_awaited_once_with(1)
 
+    def test_fetch_retries_when_relay_says_too_early(self):
+        too_early = HTTPError("https://example.invalid", 425, "too early", None, None)
+        payload = beacon(7)
+        responses = [too_early, too_early, FakeResponse(payload), FakeResponse(payload)]
+        with patch.object(drand, "urlopen", side_effect=responses),              patch.object(drand.asyncio, "sleep", new_callable=AsyncMock) as sleep:
+            self.assertEqual(asyncio.run(drand.fetch(7)), payload)
+        sleep.assert_awaited_once_with(1)
+
     def test_fetch_rejects_non_positive_round(self):
         with self.assertRaisesRegex(ValueError, "must be positive"):
             asyncio.run(drand.fetch(0))

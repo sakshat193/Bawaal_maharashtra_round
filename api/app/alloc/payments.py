@@ -84,3 +84,10 @@ async def verify_payment(
             or payment.get("amount") != amount_paise or payment.get("currency") != "INR"
             or payment.get("status") != "captured"):
         raise PaymentProviderError("Razorpay payment does not match this offer")
+
+
+async def refund_payment(*, payment_id: str, amount_paise: int) -> None:
+    """Refund a verified (HMAC + captured) payment that arrived after its offer closed."""
+    result = await asyncio.to_thread(_request, "POST", f"/payments/{payment_id}/refund", {"amount": amount_paise})
+    if not isinstance(result.get("id"), str):
+        raise PaymentProviderError("Razorpay did not create a refund")

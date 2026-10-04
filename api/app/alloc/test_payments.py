@@ -69,3 +69,12 @@ class RazorpayAdapterTests(unittest.TestCase):
                     offer_id=offer_id, amount_paise=900_000, provider_order_id=provider_order_id,
                     payment_id=payment_id, signature=signature,
                 ))
+
+    def test_refund_payment_posts_the_captured_amount_and_requires_a_refund_id(self):
+        with patch.object(payments, "_request", return_value={"id": "rfnd_1"}) as request:
+            asyncio.run(payments.refund_payment(payment_id="pay_123", amount_paise=900_000))
+        request.assert_called_once_with("POST", "/payments/pay_123/refund", {"amount": 900_000})
+        with patch.object(payments, "_request", return_value={}):
+            with self.assertRaisesRegex(payments.PaymentProviderError, "refund"):
+                asyncio.run(payments.refund_payment(payment_id="pay_123", amount_paise=900_000))
+

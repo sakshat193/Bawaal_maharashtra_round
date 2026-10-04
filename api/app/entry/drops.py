@@ -168,7 +168,7 @@ def drop_detail(conn, drop_id) -> dict:
 def list_drops(response: Response):
     with get_pool().connection() as conn:
         rows = conn.execute("SELECT * FROM drops ORDER BY opens_at, drop_id").fetchall()
-    response.headers["Cache-Control"] = "public, max-age=5"
+    response.headers["Cache-Control"] = "public, max-age=5, s-maxage=5"
     return {"server_time": iso_s(utcnow()), "drops": [_summary(r) for r in rows]}
 
 
@@ -176,7 +176,7 @@ def list_drops(response: Response):
 def get_drop(drop_id: uuid.UUID, response: Response):
     with get_pool().connection() as conn:
         out = drop_detail(conn, drop_id)
-    response.headers["Cache-Control"] = "public, max-age=2"
+    response.headers["Cache-Control"] = "public, max-age=2, s-maxage=2"
     return out
 
 

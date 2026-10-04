@@ -61,8 +61,8 @@ async def fetch(round_number: int) -> dict[str, object]:
                 asyncio.to_thread(request, DRAND_RELAYS[1]),
             )
         except HTTPError as exc:
-            # A round that is not yet published is expected; wait for this exact round.
-            if exc.code == 404:
+            # 404/425: round not published yet is expected; wait for this exact round.
+            if exc.code in (404, 425):
                 await asyncio.sleep(1)
                 continue
             raise

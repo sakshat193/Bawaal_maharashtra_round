@@ -1,10 +1,12 @@
 """Admin: seal now (demo) and reset."""
+import importlib.util
 import uuid
 from datetime import timedelta
 
-from fastapi import APIRouter, Body, Depends
+from fastapi import APIRouter, Body, Depends, Response
 from fastapi.concurrency import run_in_threadpool
 
+from ..config import REPO_ROOT
 from ..db import get_pool
 from ..errors import ApiError
 from ..timefmt import iso_s, utcnow
@@ -56,3 +58,44 @@ def admin_reset(body: dict = Body(default={})):
         if body.get("seed_demo_drop", True):
             out["drop"] = drop_detail(conn, create_drop(conn, demo_drop_request()))
         return out
+
+
+@router.get("/api/admin/drops/{drop_id}/traffic")
+def admin_traffic(drop_id: uuid.UUID, response: Response):
+    """Entries grouped by /24 (/48) subnet. Operator hint only: never weighted, never published."""
+    response.headers["Cache-Control"] = "private, no-store"
+    with get_pool().connection() as conn:
+        d = load_drop(conn, drop_id)
+        # ponytail: top 1000 subnets by volume; paginate if a drop ever has more
+        rows = conn.execute(
+            """SELECT coalesce(client_subnet, 'unknown') AS subnet, count(*) AS entries,
+                      count(DISTINCT device_hash) AS devices, count(DISTINCT payment_fingerprint) AS payments,
+                      count(*) FILTER (WHERE eligible = false) AS excluded,
+                      array_remove(array_agg(DISTINCT exclusion_reason), NULL) AS reasons,
+                      min(accepted_at) AS first_at, max(accepted_at) AS last_at
+                 FROM entries WHERE drop_id = %s GROUP BY 1 ORDER BY entries DESC, subnet LIMIT 1000""",
+            (drop_id,)).fetchall()
+    return {"drop_id": str(drop_id), "sealed": d["phase"] not in ("scheduled", "open"),
+            "total": sum(r["entries"] for r in rows),
+            "subnets": [{**r, "first_at": iso_s(r["first_at"]), "last_at": iso_s(r["last_at"])} for r in rows]}
+
+
+@router.post("/api/admin/catalog")
+def admin_catalog():
+    """Same catalog as scripts/seed_catalog.py (imported, one source of truth). Idempotent."""
+    spec = importlib.util.spec_from_file_location("seed_catalog", REPO_ROOT / "scripts" / "seed_catalog.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    created, skipped, ids = 0, 0, []
+    with get_pool().connection() as conn:
+        for body in mod.catalog(utcnow()):
+            ids.append(body["drop_id"])
+            if conn.execute("SELECT 1 FROM drops WHERE drop_id=%s", (body["drop_id"],)).fetchone():
+                skipped += 1
+                continue
+            create_drop(conn, CreateDrop(**body))
+            created += 1
+        opened = conn.execute(
+            "UPDATE drops SET phase='open' WHERE drop_id = ANY(%s::uuid[]) AND phase='scheduled' AND opens_at <= now()",
+            (ids,)).rowcount
+    return {"created": created, "skipped": skipped, "opened": opened}

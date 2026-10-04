@@ -13,7 +13,7 @@ from .keys import get_keys
 
 router = APIRouter(tags=["evidence"])
 
-IMMUTABLE = "public, max-age=31536000, immutable"
+IMMUTABLE = "public, max-age=31536000, s-maxage=31536000, immutable"
 EXPOSE = ("X-Fairdrop-Snapshot-Sha256, X-Fairdrop-Exclusions-Sha256, X-Fairdrop-Sealed-At, "
           "X-Fairdrop-Timestamped-At, X-Fairdrop-Timestamp-Proof")
 
@@ -32,7 +32,7 @@ def _headers(snap: dict) -> dict:
          "X-Fairdrop-Sealed-At": iso_s(snap["sealed_at"]),
          "Access-Control-Expose-Headers": EXPOSE,
          # Immutable only once the timestamp exists; before that the proof headers can still appear.
-         "Cache-Control": IMMUTABLE if snap["timestamp_proof"] else "public, max-age=2"}
+         "Cache-Control": IMMUTABLE if snap["timestamp_proof"] else "public, max-age=2, s-maxage=2"}
     if snap["timestamp_proof"]:
         h["X-Fairdrop-Timestamped-At"] = iso_s(snap["timestamped_at"])
         h["X-Fairdrop-Timestamp-Proof"] = base64.b64encode(snap["timestamp_proof"].encode()).decode("ascii")

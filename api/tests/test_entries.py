@@ -7,6 +7,7 @@ import psycopg
 from app.config import get_settings
 from app.entry import entries as entries_mod
 from app.entry import platform as platform_mod
+from app.entry import ratelimit as ratelimit_mod
 from fairdrop_common import crypto
 from fairdrop_common import pow as fpow
 
@@ -118,7 +119,7 @@ def test_pow_shape_checked_not_hashed(client):
 def test_public_endpoints(client):
     did = make_open_drop(client)
     lst = client.get("/api/drops")
-    assert lst.status_code == 200 and lst.headers["cache-control"] == "public, max-age=5"
+    assert lst.status_code == 200 and lst.headers["cache-control"] == "public, max-age=5, s-maxage=5"
     assert [d["drop_id"] for d in lst.json()["drops"]] == [did]
     d = client.get(f"/api/drops/{did}").json()
     assert d["phase"] == "open" and d["counts"] == {"entries": 0, "eligible": None, "excluded": None}
@@ -131,3 +132,40 @@ def test_admin_requires_key(client):
     assert client.post("/api/admin/drops", json=drop_body()).status_code == 401
     assert client.post("/api/admin/drops", headers={"X-Admin-Key": "wrong"}, json=drop_body()).status_code == 401
     assert client.post("/api/admin/reset", json={}).status_code == 401
+
+
+def test_traffic_view_groups_by_subnet_and_stays_out_of_snapshot(client, monkeypatch):
+    s = dataclasses.replace(get_settings(), trusted_proxies=["testclient"])
+    monkeypatch.setattr(ratelimit_mod, "get_settings", lambda: s)
+    demo = dataclasses.replace(get_settings(), demo_mode=True)   # device_hash knob needs demo mode
+    monkeypatch.setattr(platform_mod, "get_settings", lambda: demo)
+    did = make_open_drop(client)
+    for name, ip in (("a", "203.0.113.7"), ("b", "203.0.113.200"), ("c", "198.51.100.1")):
+        h = {**login(client, name, device_hash="shared" if ip.startswith("203") else f"d-{name}"),
+             "X-Forwarded-For": ip}
+        assert _enter(client, did, h).status_code == 201
+    assert client.get(f"/api/admin/drops/{did}/traffic").status_code == 401
+    assert client.get("/api/admin/drops/00000000-0000-0000-0000-000000000000/traffic", headers=A).status_code == 404
+    r = client.get(f"/api/admin/drops/{did}/traffic", headers=A)
+    assert r.headers["cache-control"] == "private, no-store"
+    top = r.json()["subnets"][0]
+    assert (top["subnet"], top["entries"], top["devices"]) == ("203.0.113.0/24", 2, 1)
+    assert r.json()["total"] == 3 and not r.json()["sealed"]
+    assert client.post(f"/api/admin/drops/{did}/seal", headers=A).status_code == 200
+    for path in ("snapshot", "exclusions"):
+        body = client.get(f"/api/drops/{did}/{path}").content
+        assert b"203.0.113" not in body and b"client_subnet" not in body
+
+
+def test_admin_catalog_is_idempotent(client):
+    assert client.post("/api/admin/catalog").status_code == 401
+    first = client.post("/api/admin/catalog", headers=A).json()
+    assert first == {"created": 60, "skipped": 0, "opened": 40}
+    assert client.post("/api/admin/catalog", headers=A).json() == {"created": 0, "skipped": 60, "opened": 0}
+
+
+def test_admin_draw_far_future_round_answers_409_not_hang(client):
+    did = make_open_drop(client)                     # closes in 30 min, so its drand round is far off
+    r = client.post(f"/api/admin/drops/{did}/draw", headers=A)
+    assert r.status_code == 409 and r.json()["error"] == "draw_not_due" and "due_at" in r.json()
+    assert client.post("/api/admin/drops/00000000-0000-0000-0000-000000000000/draw", headers=A).status_code == 404

@@ -9,15 +9,32 @@ from ..config import get_settings
 from ..errors import ApiError
 
 
+def _trusted(host: str) -> bool:
+    """A configured proxy: exact entry (e.g. "testclient") or an address inside a listed CIDR."""
+    items = get_settings().trusted_proxies
+    if host in items:
+        return True
+    try:
+        addr = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    for item in items:
+        try:
+            if addr in ipaddress.ip_network(item, strict=False):
+                return True
+        except ValueError:
+            continue
+    return False
+
+
 def client_ip(request: Request) -> str:
     """Peer address, or the right-most untrusted X-Forwarded-For hop when the peer is a trusted proxy."""
     peer = request.client.host if request.client else "unknown"
-    trusted = set(get_settings().trusted_proxies)
-    if peer not in trusted:
+    if not _trusted(peer):
         return peer
     hops = [h.strip() for h in request.headers.get("x-forwarded-for", "").split(",") if h.strip()]
     for hop in reversed(hops):
-        if hop not in trusted:
+        if not _trusted(hop):
             try:
                 ipaddress.ip_address(hop)
                 return hop
@@ -27,7 +44,17 @@ def client_ip(request: Request) -> str:
 
 
 def via_trusted_proxy(request: Request) -> bool:
-    return bool(request.client) and request.client.host in set(get_settings().trusted_proxies)
+    return bool(request.client) and _trusted(request.client.host)
+
+
+def subnet_of(ip: str) -> str | None:
+    """IPv4 /24 or IPv6 /48 around ip, None for a non-address. The full IP is never stored."""
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return None
+    addr = getattr(addr, "ipv4_mapped", None) or addr
+    return str(ipaddress.ip_network(f"{addr}/{24 if addr.version == 4 else 48}", strict=False))
 
 
 class TokenBucket:

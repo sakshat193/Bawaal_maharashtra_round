@@ -54,6 +54,7 @@ CREATE TABLE entries (
   eligible            BOOLEAN,                       -- NULL until the seal
   exclusion_reason    TEXT,                          -- 'pow_invalid' or 'sybil:<rule_id>'
   accepted_at         TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
+  client_subnet       TEXT,                          -- /24 or /48 only; admin view, never published
   UNIQUE (drop_id, identity_id),
   FOREIGN KEY (drop_id, tier_id) REFERENCES tiers
 );

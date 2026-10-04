@@ -12,7 +12,7 @@ import pytest
 from psycopg.errors import CheckViolation
 
 from app import alloc as alloc_module
-from app.alloc import _Connection, _draw_drop, _sweep_once
+from app.alloc import _Connection, _draw_drop, _draw_due, _sweep_once
 from fairdrop_common.drand import time_of
 from fairdrop_common.canonical import snapshot_bytes
 
@@ -332,8 +332,10 @@ def test_promotion_cap_releases_unused_units_to_general_sale(live_server):
         promoted_id = connection.execute(
             "SELECT offer_id FROM offers WHERE drop_id=%s", (drop["drop_id"],)
         ).fetchone()[0]
+        # Close the wave: round 1 lasts one offer TTL, so backdate it before the second sweep.
         connection.execute(
-            "UPDATE offers SET status='declined' WHERE offer_id=%s", (promoted_id,)
+            "UPDATE offers SET status='declined', expires_at=clock_timestamp()-interval '1 second' WHERE offer_id=%s",
+            (promoted_id,),
         )
         connection.execute(
             "UPDATE tiers SET held=held-1 WHERE drop_id=%s AND tier_id='gold'", (drop["drop_id"],)
@@ -409,3 +411,91 @@ def test_draw_is_idempotent_for_one_sealed_snapshot(live_server, monkeypatch):
         ).fetchone()
     assert first and not second
     assert counts == (1, 1, 1)
+
+
+def test_releases_inside_one_offer_window_share_a_promotion_round(live_server):
+    drop = _seed_ranked_drop(
+        live_server.url, quantities=[1, 1, 1], capacity=1, max_rounds=1, active_first=False,
+    )
+    _sweep_once_in_new_connection()
+    with psycopg.connect(TEST_URL) as connection:
+        first = connection.execute("SELECT offer_id FROM offers WHERE drop_id=%s", (drop["drop_id"],)).fetchone()[0]
+        connection.execute("UPDATE offers SET status='declined' WHERE offer_id=%s", (first,))
+        connection.execute("UPDATE tiers SET held=held-1 WHERE drop_id=%s AND tier_id='gold'", (drop["drop_id"],))
+    _sweep_once_in_new_connection()
+    with psycopg.connect(TEST_URL) as connection:
+        rounds = connection.execute(
+            "SELECT round FROM offers WHERE drop_id=%s ORDER BY round", (drop["drop_id"],)).fetchall()
+        phase = connection.execute("SELECT phase FROM drops WHERE drop_id=%s", (drop["drop_id"],)).fetchone()[0]
+    assert rounds == [(1,), (1,)]
+    assert phase == "drawn"
+
+
+def test_background_draw_skips_a_drop_whose_drand_round_is_not_due(live_server, monkeypatch):
+    drop = _seed_sealed_drop(live_server.url)
+
+    async def unexpected_fetch(_round_number):
+        raise AssertionError("a future round must not be fetched by the background loop")
+
+    monkeypatch.setattr(alloc_module, "fetch_drand", unexpected_fetch)
+    with psycopg.connect(TEST_URL, autocommit=True) as connection:
+        asyncio.run(_draw_due(_Connection(connection)))
+        count = connection.execute("SELECT count(*) FROM draws WHERE drop_id=%s", (drop["drop_id"],)).fetchone()[0]
+    assert count == 0
+
+
+def _pay_razorpay(base_url, offer):
+    with httpx.Client(base_url=base_url, timeout=30) as client:
+        return client.post(
+            f"/api/offers/{offer['offer_id']}/pay", headers=offer["headers"],
+            json={"order_id": offer["order_id"], "provider": "razorpay", "razorpay_order_id": "order_1",
+                  "razorpay_payment_id": "pay_1", "razorpay_signature": "sig"},
+        )
+
+
+def _stub_razorpay(monkeypatch):
+    refunds = []
+
+    async def verified(**_kwargs):
+        return None
+
+    async def refund(**kwargs):
+        refunds.append(kwargs)
+
+    monkeypatch.setattr(alloc_module, "verify_payment", verified)
+    monkeypatch.setattr(alloc_module, "refund_payment", refund)
+    return refunds
+
+
+@pytest.mark.parametrize("failed_by_sweeper", [False, True])
+def test_late_razorpay_payment_is_refunded(live_server, monkeypatch, failed_by_sweeper):
+    refunds = _stub_razorpay(monkeypatch)
+    offer = _seed_offer(live_server.url, status="payment_pending", pay_deadline_in=-1)
+    if failed_by_sweeper:
+        _sweep_once_in_new_connection()
+    response = _pay_razorpay(live_server.url, offer)
+    assert response.status_code == 409
+    assert response.json()["error"] == "payment_window_closed"
+    assert response.json()["refund"] is True
+    assert refunds == [{"payment_id": "pay_1", "amount_paise": 450000}]
+
+
+def test_confirmed_razorpay_offer_is_never_refunded(live_server, monkeypatch):
+    refunds = _stub_razorpay(monkeypatch)
+    offer = _seed_offer(live_server.url, status="payment_pending", pay_deadline_in=300)
+    assert _pay_razorpay(live_server.url, offer).status_code == 200
+    again = _pay_razorpay(live_server.url, offer)
+    assert again.status_code == 409
+    assert again.json()["error"] == "not_payment_pending"
+    assert refunds == []
+
+
+def test_public_evidence_and_private_me_cache_headers(live_server):
+    drop = _seed_sealed_drop(live_server.url)
+    offer = _seed_offer(live_server.url)
+    with httpx.Client(base_url=live_server.url, timeout=30) as client:
+        assert client.get(f"/api/drops/{offer['drop_id']}/invariants").headers["cache-control"] == "public, max-age=2, s-maxage=2"
+        assert "cache-control" not in client.get(f"/api/drops/{drop['drop_id']}/draw").headers  # 404 is never cached
+        me = client.get(f"/api/drops/{offer['drop_id']}/me", headers=offer["headers"])
+    assert me.headers["cache-control"] == "private, no-store"
+    assert me.json()["offer"]["order_id"] is None
