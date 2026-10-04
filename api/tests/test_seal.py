@@ -131,7 +131,8 @@ def test_exclusions_reproducible_and_order_independent(client, monkeypatch):
     for seed in range(5):
         random.Random(seed).shuffle(rows)
         assert sealmod.compute_exclusions(drop, rows) == first
-    assert canonical.exclusions_bytes(first) == client.get(f"/api/drops/{did}/exclusions").content
+    expected_rows = [{"entry_id": entry_id, "reason": reason} for entry_id, reason in first]
+    assert canonical.exclusions_bytes(expected_rows) == client.get(f"/api/drops/{did}/exclusions").content
 
 
 def test_seal_is_idempotent_and_closes_window(client):
