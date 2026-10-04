@@ -11,14 +11,14 @@
         "speed_bots": {
           "identities": 20,
           "entries": 20,
-          "tickets_won": 6,
+          "tickets_won": 4,
           "bot": true,
           "cohort": "speed_bots"
         },
         "broker": {
           "identities": 10,
           "entries": 10,
-          "tickets_won": 12,
+          "tickets_won": 16,
           "bot": true,
           "cohort": "broker"
         },
@@ -39,14 +39,14 @@
         "honest_groups": {
           "identities": 30,
           "entries": 30,
-          "tickets_won": 14,
+          "tickets_won": 20,
           "bot": false,
           "cohort": "groups"
         },
         "honest_singles": {
           "identities": 30,
           "entries": 30,
-          "tickets_won": 8,
+          "tickets_won": 0,
           "bot": false,
           "cohort": "singles"
         },
@@ -86,13 +86,13 @@
           "cohort": "sybil_cluster"
         }
       },
-      "bot_ticket_share": 0.43902,
+      "bot_ticket_share": 0.4878,
       "bot_identity_share": 0.38235,
-      "bot_share_ratio": 1.148,
+      "bot_share_ratio": 1.276,
       "groups_vs_singles": {
-        "group_members": 14,
-        "singles": 8,
-        "ratio": 1.75
+        "group_members": 20,
+        "singles": 0,
+        "ratio": null
       },
       "exclusions_per_rule": {},
       "invariants": {
@@ -233,7 +233,9 @@
         "singles": 0,
         "ratio": null
       },
-      "exclusions_per_rule": {},
+      "exclusions_per_rule": {
+        "sybil:device": 6
+      },
       "invariants": {
         "held_within_capacity": true,
         "held_matches_active_offers": true,
@@ -289,14 +291,14 @@
         "speed_bots": {
           "identities": 20,
           "entries": 20,
-          "tickets_won": 10,
+          "tickets_won": 7,
           "bot": true,
           "cohort": "speed_bots"
         },
         "broker": {
           "identities": 10,
           "entries": 10,
-          "tickets_won": 8,
+          "tickets_won": 4,
           "bot": true,
           "cohort": "broker"
         },
@@ -317,14 +319,14 @@
         "honest_groups": {
           "identities": 30,
           "entries": 30,
-          "tickets_won": 13,
+          "tickets_won": 16,
           "bot": false,
           "cohort": "groups"
         },
         "honest_singles": {
           "identities": 30,
           "entries": 30,
-          "tickets_won": 9,
+          "tickets_won": 13,
           "bot": false,
           "cohort": "singles"
         },
@@ -364,15 +366,17 @@
           "cohort": "sybil_cluster"
         }
       },
-      "bot_ticket_share": 0.43902,
+      "bot_ticket_share": 0.26829,
       "bot_identity_share": 0.38235,
-      "bot_share_ratio": 1.148,
+      "bot_share_ratio": 0.702,
       "groups_vs_singles": {
-        "group_members": 13,
-        "singles": 9,
-        "ratio": 1.4444
+        "group_members": 16,
+        "singles": 13,
+        "ratio": 1.2308
       },
-      "exclusions_per_rule": {},
+      "exclusions_per_rule": {
+        "sybil:device": 6
+      },
       "invariants": {
         "held_within_capacity": true,
         "held_matches_active_offers": true,

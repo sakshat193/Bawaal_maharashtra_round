@@ -13,6 +13,10 @@ test('published live harness evidence passes every mode and attack', () => {
     assert.equal(mode.invariants.held_matches_active_offers, true, mode.mode);
     assert.equal(mode.invariants.oversell, 0, mode.mode);
     assert.equal(mode.invariants.double_redemption, 0, mode.mode);
+    assert.deepEqual(mode.exclusions_per_rule, mode.mode === 'naive_fcfs' ? {} : {
+      'sybil:device': mode.profiles.sybil_cluster.entries
+    });
+    if (mode.mode !== 'naive_fcfs') assert.equal(mode.profiles.sybil_cluster.tickets_won, 0);
     assert.deepEqual(Object.keys(mode.attack_checks).sort(),
       ['double_redeem', 'forged_redeem', 'late_payer', 'payment_failer', 'reconnect', 'replay']);
     for (const [name, check] of Object.entries(mode.attack_checks)) {
