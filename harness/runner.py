@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import inspect
 import json
 import math
 import os
@@ -49,15 +48,7 @@ def _solve_pow(parameters: dict) -> list[int]:
         from fairdrop_common.pow import solve
     except ModuleNotFoundError:
         from common.fairdrop_common.pow import solve
-    signature = inspect.signature(solve)
-    values = {key: parameters[key] for key in ("challenge", "bits", "k", "memory_kib") if key in parameters}
-    if {"challenge", "bits", "k"} <= values.keys():
-        if "memory_kib" in signature.parameters:
-            values["memory_kib"] = parameters.get("memory_kib", 0)
-        return solve(**{name: value for name, value in values.items() if name in signature.parameters})
-    if len(signature.parameters) == 1:
-        return solve(parameters)
-    raise RuntimeError("pow.solve must accept a challenge parameter object or challenge/bits/k[/memory_kib]")
+    return solve(parameters["challenge"], parameters["bits"], parameters["k"], parameters["memory_kib"])
 
 
 def _drop_body(mode: str, drop_id: str, close_at: datetime, pow_bits: int) -> dict:
