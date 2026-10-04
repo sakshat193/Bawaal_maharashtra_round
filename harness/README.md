@@ -1,6 +1,6 @@
 # Member 4 tools
 
-Install the shared package with `pip install -e common` after Member 2 adds the Stage 0 package setup. From this checkout, the tools also find the source under `common/`.
+Install the shared package with `pip install -e common` before running the tools.
 
 ## Attack harness
 
@@ -14,7 +14,7 @@ The harness creates naive FCFS, hardened FCFS, and WIL drops. It logs in each sy
 
 The harness calls `common.fairdrop_common.pow.solve` in a process pool when a drop requires proof-of-work. Use `--pow-bits`, `--workers`, and `--concurrency` to tune a local run. The payment test tier reserves offers for the adversarial payment checks. Fairness metrics include this tier.
 
-The default demo run uses 4 PoW bits, 16 sub-puzzles and 2048 KiB per puzzle, with a 180-second registration window for all three populations. Higher difficulty needs enough workers to finish before the published close; a late entry fails the run. The configured values are public in each created drop.
+The default demo run uses 4 PoW bits, 16 sub-puzzles and 2048 KiB per puzzle. Each mode opens its own 180-second registration window when its population gets the workers. Each mode draws and runs its attacks at its own committed round, so its offers cannot expire waiting for another mode. Higher difficulty needs enough workers to finish before the published close; a late entry fails the run. The configured values are public in each created drop. Published exclusions are checked against their canonical bytes, SHA-256 header and frozen Sybil rules before reporting rule counts.
 
 ## Fixture server
 

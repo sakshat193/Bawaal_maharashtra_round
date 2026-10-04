@@ -13,7 +13,7 @@ from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from fairdrop_common import canonical, sybil
+from fairdrop_common import canonical, pow, sybil
 
 from .api import FairDropApi, bearer_token
 from .attacks import run_attacks
@@ -46,11 +46,7 @@ def _jwt_identity(token: str):
 
 
 def _solve_pow(parameters: dict) -> list[int]:
-    try:
-        from fairdrop_common.pow import solve
-    except ModuleNotFoundError:
-        from common.fairdrop_common.pow import solve
-    return solve(parameters["challenge"], parameters["bits"], parameters["k"], parameters["memory_kib"])
+    return pow.solve(parameters["challenge"], parameters["bits"], parameters["k"], parameters["memory_kib"])
 
 
 def _drop_body(mode: str, drop_id: str, close_at: datetime, pow_bits: int) -> dict:
@@ -239,71 +235,67 @@ def _summarize(mode: str, users: list[dict], outcomes: list[dict], invariants: d
     }
 
 
+async def _finish_mode(api: FairDropApi, drop: dict) -> dict:
+    due = GENESIS + (drop["drand_round"] - 1) * PERIOD
+    wait = due + 1 - datetime.now(timezone.utc).timestamp()
+    if wait > 0:
+        print(f"Waiting {int(wait)}s for {drop['mode']} committed round {drop['drand_round']}.")
+        await asyncio.sleep(wait)
+    await api.checked("POST", f"/api/admin/drops/{drop['drop_id']}/draw", admin=True, body={})
+    attack_checks = await run_attacks(api, drop['drop_id'], drop['users'])
+    users_for_drop = drop["users"]
+    outcomes_value = await api.checked(
+        "GET", f"/api/admin/drops/{drop['drop_id']}/outcomes", admin=True
+    )
+    outcomes = outcomes_value.get("outcomes", outcomes_value.get("entries", outcomes_value.get("data", [])))
+    if not isinstance(outcomes, list):
+        raise RuntimeError("admin outcomes response must contain an outcomes list")
+    invariants_value = await api.checked(
+        "GET", f"/api/drops/{drop['drop_id']}/invariants"
+    )
+    exclusion_rows = await _published_exclusions(api, drop, users_for_drop)
+    return _summarize(
+        drop["mode"], users_for_drop, outcomes,
+        _invariant_summary(invariants_value), attack_checks, exclusion_rows,
+    )
+
+
 async def run_harness(base_url: str, profiles_path: Path, out_path: Path, workers: int = 4, concurrency: int = 32, pow_bits: int = 4) -> dict:
     admin_key = os.environ.get("ADMIN_KEY")
     if not admin_key:
         raise ValueError("set ADMIN_KEY in the environment before running the live harness")
     profiles, templates = load_users(profiles_path)
     api = FairDropApi(base_url, admin_key)
+    finishes = []
     try:
         login_limit = asyncio.Semaphore(32)
         async def login_limited(user):
             async with login_limit:
                 return await _login(api, user)
         users = await asyncio.gather(*(login_limited(user) for user in templates))
-        # Four workers solve two hardened populations before any drop is sealed.
-        close_at = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(seconds=180)
-        drops = await asyncio.gather(*(
-            _create_mode(api, mode, close_at, pow_bits) for mode in MODES
-        ))
-        for drop in drops:
-            drop["drand_round"] = int(drop.get("drand_round") or _round_at(close_at + timedelta(minutes=2)))
+        # A mode's entry window starts when its population gets the workers.
+        # Finish each mode at its own round so early offers cannot expire waiting for later modes.
         with ProcessPoolExecutor(max_workers=workers) as pool:
-            semaphore = asyncio.Semaphore(concurrency)
-            registered = await asyncio.gather(*(
-                asyncio.gather(*(
+            for mode in MODES:
+                close_at = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(seconds=180)
+                drop = await _create_mode(api, mode, close_at, pow_bits)
+                drop["drand_round"] = int(drop.get("drand_round") or _round_at(close_at + timedelta(minutes=2)))
+                semaphore = asyncio.Semaphore(concurrency)
+                drop["users"] = list(await asyncio.gather(*(
                     _register(api, drop, user, pool, semaphore)
                     for user in sorted(users, key=lambda item: (item["arrival"] != "first", item["profile"], item["profile_index"]))
-                )) for drop in drops
-            ))
-            for index, drop in enumerate(drops):
-                drop["users"] = list(registered[index])
+                )))
                 await api.checked("POST", f"/api/admin/drops/{drop['drop_id']}/seal", admin=True, body={})
-        due_round = max(drop["drand_round"] for drop in drops)
-        due = GENESIS + (due_round - 1) * PERIOD
-        wait = due + 1 - datetime.now(timezone.utc).timestamp()
-        if wait > 0:
-            print(f"Waiting {int(wait)}s for committed drand round {due_round}.")
-            await asyncio.sleep(wait)
-
-        await asyncio.gather(*(
-            api.checked("POST", f"/api/admin/drops/{drop['drop_id']}/draw", admin=True, body={})
-            for drop in drops
-        ))
-        attacks_by_mode = await asyncio.gather(*(
-            run_attacks(api, drop["drop_id"], drop["users"]) for drop in drops
-        ))
-        mode_results = []
-        for drop, attack_checks in zip(drops, attacks_by_mode):
-            users_for_drop = drop["users"]
-            outcomes_value = await api.checked(
-                "GET", f"/api/admin/drops/{drop['drop_id']}/outcomes", admin=True
-            )
-            outcomes = outcomes_value.get("outcomes", outcomes_value.get("entries", outcomes_value.get("data", [])))
-            if not isinstance(outcomes, list):
-                raise RuntimeError("admin outcomes response must contain an outcomes list")
-            invariants_value = await api.checked(
-                "GET", f"/api/drops/{drop['drop_id']}/invariants"
-            )
-            exclusion_rows = await _published_exclusions(api, drop, users_for_drop)
-            mode_results.append(_summarize(
-                drop["mode"], users_for_drop, outcomes,
-                _invariant_summary(invariants_value), attack_checks, exclusion_rows,
-            ))
+                finishes.append(asyncio.create_task(_finish_mode(api, drop)))
+        mode_results = await asyncio.gather(*finishes)
         result = {"schema_version": 1, "source": "live_harness", "modes": mode_results}
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(json.dumps(result, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
         return result
     finally:
+        for task in finishes:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*finishes, return_exceptions=True)
         await api.close()
 

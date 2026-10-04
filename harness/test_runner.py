@@ -54,7 +54,29 @@ def test_harness_leaves_time_for_the_whole_population(monkeypatch):
     with pytest.raises(RuntimeError, match="stop before"):
         asyncio.run(runner.run_harness("http://example.test", Path("unused"), Path("unused")))
     assert all((deadline - before).total_seconds() >= 179 for deadline in deadlines)
-    assert difficulties == [4, 4, 4]
+    assert difficulties == [4]
+
+
+def test_each_mode_opens_after_previous_population_is_registered(monkeypatch, tmp_path):
+    monkeypatch.setenv('ADMIN_KEY', 'test-admin')
+    monkeypatch.setattr(runner, 'load_users', lambda path: ({}, [{}]))
+    monkeypatch.setattr(runner, '_login', AsyncMock(return_value={'arrival': 'normal', 'profile': 'x', 'profile_index': 0}))
+    monkeypatch.setattr(runner, 'FairDropApi', lambda *args: type('Api', (), {'close': AsyncMock(), 'checked': AsyncMock()})())
+    events = []
+    async def create(api, mode, close_at, bits):
+        events.append(('create', mode))
+        return {'drop_id': mode, 'mode': mode, 'drand_round': 1}
+    async def register(api, drop, user, pool, semaphore):
+        events.append(('register', drop['mode']))
+        return user
+    async def finish(api, drop):
+        return {'mode': drop['mode']}
+    monkeypatch.setattr(runner, '_create_mode', create)
+    monkeypatch.setattr(runner, '_register', register)
+    monkeypatch.setattr(runner, '_finish_mode', finish, raising=False)
+    result = asyncio.run(runner.run_harness('http://example.test', Path('unused'), tmp_path / 'results.json'))
+    assert events == [(action, mode) for mode in runner.MODES for action in ('create', 'register')]
+    assert [mode['mode'] for mode in result['modes']] == list(runner.MODES)
 
 
 def test_invariants_preserve_real_duplicate_counter():
