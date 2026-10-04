@@ -16,7 +16,8 @@ async function artifact(url, names, signal, exclusions = false) {
   const response = await fetch(url, { signal });
   if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
   const metadata = Object.fromEntries(response.headers.entries());
-  if (!response.headers.get('content-type')?.includes('json')) {
+  const mediaType = response.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase();
+  if (mediaType !== 'application/json') {
     return { bytes: new Uint8Array(await response.arrayBuffer()), metadata };
   }
   const value = await response.json();
@@ -57,7 +58,7 @@ function evidenceRows(draw) {
   let rows = draw.round_0_allocation ?? draw.initial_allocation ?? draw.allocation ?? draw.offers;
   if (rows && !Array.isArray(rows)) rows = rows.offers ?? rows.entries ?? rows.allocated ?? Object.entries(rows).flatMap(([tier_id, ids]) =>
     Array.isArray(ids) ? ids.map(entry_id => ({ entry_id, tier_id })) : []);
-  return Array.isArray(rows) ? rows : null;
+  return Array.isArray(rows) ? rows.filter(row => (row.round ?? 0) === 0) : null;
 }
 
 function allocationRows(rows, entries) {
@@ -85,16 +86,17 @@ async function verifyDrop(dropId, signal) {
   if (exclusions.some(row => eligibleIds.has(row.entry_id))) throw new Error('An entry appears in both the snapshot and exclusions');
   const snapshotHash = await sha256Hex(snapshotArtifact.bytes);
   const exclusionsHash = await sha256Hex(exclusionsArtifact.bytes);
-  const expectedSnapshot = published(snapshotArtifact.metadata, 'canonical_hash', 'snapshot_hash', 'x-snapshot-hash', 'x-canonical-hash') ?? draw.snapshot_hash ?? draw.canonical_hash;
-  const expectedExclusions = published(exclusionsArtifact.metadata, 'exclusions_hash', 'x-exclusions-hash') ?? draw.exclusions_hash ?? header.exclusions_hash;
-  let timestampProof = published(snapshotArtifact.metadata, 'timestamp_proof', 'x-timestamp-proof');
+  const expectedSnapshot = published(snapshotArtifact.metadata, 'canonical_hash', 'snapshot_hash', 'x-fairdrop-snapshot-sha256', 'x-snapshot-hash', 'x-canonical-hash') ?? draw.snapshot_hash ?? draw.canonical_hash;
+  const expectedExclusions = published(exclusionsArtifact.metadata, 'exclusions_hash', 'x-fairdrop-exclusions-sha256', 'x-exclusions-hash') ?? draw.exclusions_hash ?? header.exclusions_hash;
+  const encodedProof = published(snapshotArtifact.metadata, 'x-fairdrop-timestamp-proof');
+  let timestampProof = encodedProof != null ? JSON.parse(atob(encodedProof))
+    : published(snapshotArtifact.metadata, 'timestamp_proof', 'x-timestamp-proof');
   if (typeof timestampProof === 'string') {
-    try { timestampProof = JSON.parse(timestampProof); } catch { /* The raw proof string is still evidence. */ }
+    timestampProof = JSON.parse(timestampProof);
   }
-  const timestampedAt = published(snapshotArtifact.metadata, 'timestamped_at', 'x-timestamped-at') ?? timestampProof?.timestamped_at;
-  const proofPresent = typeof timestampProof === 'string'
-    ? Boolean(timestampProof.trim())
-    : ['ots_receipt', 'ots_proof', 'opentimestamps', 'public_commit_url', 'commit_url', 'proof'].some(key => timestampProof?.[key]);
+  const timestampedAt = published(snapshotArtifact.metadata, 'timestamped_at', 'x-fairdrop-timestamped-at', 'x-timestamped-at') ?? timestampProof?.timestamped_at;
+  const proofPresent = (timestampProof?.ots?.calendars?.length || timestampProof?.git?.commit)
+    && timestampProof.snapshot_sha256 === snapshotHash;
   if (!expectedSnapshot || snapshotHash !== String(expectedSnapshot).trim().toLowerCase()) throw new Error('Snapshot hash differs from its published hash');
   if (!expectedExclusions || exclusionsHash !== String(expectedExclusions).trim().toLowerCase()) throw new Error('Exclusions hash differs from its published hash');
   if (header.exclusions_hash !== exclusionsHash) throw new Error('Snapshot header does not commit to the exclusions hash');
