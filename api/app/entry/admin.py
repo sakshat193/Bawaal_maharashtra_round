@@ -36,15 +36,15 @@ def demo_drop_request() -> CreateDrop:
     now = utcnow().replace(microsecond=0)
     return CreateDrop(
         name="Fair Drop Live", venue="Demo Arena", starts_at=now + timedelta(days=30),
-        opens_at=now + timedelta(seconds=10), closes_at=now + timedelta(minutes=3),
+        opens_at=now + timedelta(seconds=10), closes_at=now + timedelta(seconds=70),   # 60 s registration
         allocation_mode="lottery_wil", pow_required=True, turnstile_required=True, pow_bits=4,
         offer_ttl_s=60, pay_deadline_s=30, max_promotion_rounds=3,
-        seat_selection=True, seat_wave_size=10, seat_wave_s=20,
+        seat_selection=True, seat_wave_size=8, seat_wave_s=20,
         sybil_rules=[{"id": "device", "kind": "max_per_device", "limit": 2},
                      {"id": "payment", "kind": "max_per_payment", "limit": 2},
                      {"id": "fresh", "kind": "min_account_age_s", "value": 86400}],
-        tiers=[{"tier_id": "gold", "name": "Gold", "price_paise": 450000, "capacity": 100},
-               {"tier_id": "silver", "name": "Silver", "price_paise": 200000, "capacity": 300}],
+        tiers=[{"tier_id": "gold", "name": "Gold", "price_paise": 450000, "capacity": 24},
+               {"tier_id": "silver", "name": "Silver", "price_paise": 200000, "capacity": 60}],
     )
 
 
