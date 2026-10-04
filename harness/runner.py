@@ -165,7 +165,7 @@ async def _published_exclusions(api: FairDropApi, drop: dict, users: list[dict])
     if response.status_code != 200:
         raise RuntimeError(f'exclusions returned {response.status_code}')
     blob = response.content
-    if hashlib.sha256(blob).hexdigest() != response.headers.get('X-Fairdrop-Exclusions-Hash'):
+    if hashlib.sha256(blob).hexdigest() != response.headers.get('X-Fairdrop-Exclusions-Sha256'):
         raise RuntimeError('published exclusions hash does not match bytes')
     rows = [json.loads(line) for line in blob.splitlines()]
     if canonical.exclusions_bytes(rows) != blob:

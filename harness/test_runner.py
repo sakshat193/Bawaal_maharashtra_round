@@ -75,15 +75,15 @@ def test_published_exclusions_bind_rules_and_populate_counts():
             for user in users if user['profile'] == 'sybil_cluster']
     blob = canonical.exclusions_bytes(rows)
     api = type('Api', (), {'request': AsyncMock(return_value=httpx.Response(
-        200, content=blob, headers={'X-Fairdrop-Exclusions-Hash': hashlib.sha256(blob).hexdigest()}))})()
+        200, content=blob, headers={'X-Fairdrop-Exclusions-Sha256': hashlib.sha256(blob).hexdigest()}))})()
     drop = {'drop_id': 'test', 'sybil_rules': [{'id': 'device', 'kind': 'max_per_device', 'limit': 2}]}
     published = asyncio.run(runner._published_exclusions(api, drop, users))
     result = _summarize('lottery_wil', users, [], {}, {}, published)
     assert result['exclusions_per_rule'] == {'sybil:device': profiles['sybil_cluster']['count']}
     api.request.return_value = httpx.Response(200, content=b'', headers={
-        'X-Fairdrop-Exclusions-Hash': hashlib.sha256(b'').hexdigest()})
+        'X-Fairdrop-Exclusions-Sha256': hashlib.sha256(b'').hexdigest()})
     with pytest.raises(RuntimeError, match='frozen Sybil rules'):
         asyncio.run(runner._published_exclusions(api, drop, users))
-    api.request.return_value = httpx.Response(200, content=blob, headers={'X-Fairdrop-Exclusions-Hash': '0' * 64})
+    api.request.return_value = httpx.Response(200, content=blob, headers={'X-Fairdrop-Exclusions-Sha256': '0' * 64})
     with pytest.raises(RuntimeError, match='hash'):
         asyncio.run(runner._published_exclusions(api, drop, users))
