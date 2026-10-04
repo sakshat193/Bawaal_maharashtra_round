@@ -15,6 +15,7 @@ from psycopg.errors import CheckViolation
 from app import alloc as alloc_module
 from app.alloc import _Connection, _draw_drop, _sweep_once
 from fairdrop_common.drand import time_of
+from fairdrop_common.canonical import snapshot_bytes
 
 from .conftest import TEST_URL, A, drop_body
 
@@ -92,7 +93,7 @@ def _seed_ranked_drop(base_url, *, quantities, capacity, max_rounds=3, active_fi
     active_offer_id = uuid.uuid4() if active_first else None
     with psycopg.connect(TEST_URL) as connection:
         connection.execute("UPDATE drops SET phase='drawn' WHERE drop_id=%s", (drop_id,))
-        connection.executemany(
+        connection.cursor().executemany(
             "INSERT INTO ranks(drop_id,entry_id,rank) VALUES(%s,%s,%s)",
             [(drop_id, entry_id, rank) for rank, entry_id in enumerate(entry_ids, 1)],
         )
@@ -143,12 +144,8 @@ def _seed_sealed_drop(base_url, *, late_proof=False, missing_proof=False):
             "exclusions_hash": "0" * 64,
             "version": "fairdrop-snapshot/2",
         }
-        snapshot = (
-            json.dumps(header, sort_keys=True, separators=(",", ":")) + "\n"
-            + json.dumps({"accepted_at": now.isoformat(), "entry_id": entry_id,
-                          "quantity": 1, "tier_id": "gold"}, sort_keys=True, separators=(",", ":"))
-            + "\n"
-        ).encode("utf-8")
+        snapshot = snapshot_bytes(header, [{"accepted_at": now, "entry_id": entry_id,
+                                           "quantity": 1, "tier_id": "gold"}])
         connection.execute("UPDATE drops SET phase='sealed' WHERE drop_id=%s", (drop_id,))
         connection.execute(
             """INSERT INTO snapshots(drop_id,sealed_at,entry_count,canonical_blob,canonical_hash,
