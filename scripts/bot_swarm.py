@@ -96,19 +96,25 @@ class Swarm:
         self.stats["network_failures"] += 1
         return None
 
+    async def get(self, url: str, **kw) -> httpx.Response:
+        """GETs are safe to repeat: poll through dropped connections and 5xx until the server answers."""
+        while (r := await self.req("GET", url, **kw)) is None or r.status_code >= 500:
+            await asyncio.sleep(1)
+        return r
+
     def log(self, msg: str) -> None:
         print(f"[{now() - self.t0:6.1f}s] {msg}", flush=True)
 
     async def find_drop(self) -> dict:
         if self.a.drop:
-            return (await self.c.get(f"/api/drops/{self.a.drop}")).json()
+            return (await self.get(f"/api/drops/{self.a.drop}")).json()
         self.log("waiting for a new drop (click Reset on the demo panel)...")
-        seen = {d["drop_id"] for d in (await self.c.get("/api/drops")).json()["drops"]} if not self.a.use_existing else set()
+        seen = {d["drop_id"] for d in (await self.get("/api/drops")).json()["drops"]} if not self.a.use_existing else set()
         while True:
-            drops = (await self.c.get("/api/drops")).json()["drops"]
+            drops = (await self.get("/api/drops")).json()["drops"]
             fresh = [d for d in drops if d["phase"] in ("scheduled", "open") and d["drop_id"] not in seen]
             if fresh:
-                return (await self.c.get(f"/api/drops/{fresh[-1]['drop_id']}")).json()
+                return (await self.get(f"/api/drops/{fresh[-1]['drop_id']}")).json()
             await asyncio.sleep(0.3)
 
     def identity_knobs(self, i: int) -> dict:
@@ -182,7 +188,7 @@ class Swarm:
 
     async def wait_phase(self, did: str, phases: set[str], need_timestamp: bool = False) -> dict:
         while True:
-            d = (await self.c.get(f"/api/drops/{did}")).json()
+            d = (await self.get(f"/api/drops/{did}")).json()
             if d["phase"] in phases and (not need_timestamp or (d.get("snapshot") or {}).get("timestamped_at")):
                 return d
             await asyncio.sleep(1)
@@ -249,7 +255,7 @@ class Swarm:
 
         self.log("waiting for the seal...")
         d = await self.wait_phase(did, {"sealed", "drawn", "settled"}, need_timestamp=True)
-        excl = (await self.c.get(f"/api/drops/{did}/exclusions")).content.decode().splitlines()
+        excl = (await self.get(f"/api/drops/{did}/exclusions")).content.decode().splitlines()
         reasons = {json.loads(line)["entry_id"]: json.loads(line)["reason"] for line in excl}
         bot_entries = {b["entry_id"]: b for b in self.bots if "entry_id" in b}
         bot_excluded = Counter(reasons[e] for e in bot_entries if e in reasons)
@@ -269,7 +275,7 @@ class Swarm:
 
         self.log(f"waiting for the draw (public drand round due {d['drand_round_due_at']})...")
         d = await self.wait_phase(did, {"drawn", "settled"})
-        draw = (await self.c.get(f"/api/drops/{did}/draw")).json()
+        draw = (await self.get(f"/api/drops/{did}/draw")).json()
         ranks = {e: i + 1 for i, e in enumerate(draw["ranked_entry_ids"])}
         winners = {a["entry_id"] for a in draw["allocation"]}
         bot_winners = [b for b in bot_eligible if b["entry_id"] in winners]
@@ -279,7 +285,7 @@ class Swarm:
 
         offers = []
         for b in bot_winners:
-            me = (await self.c.get(f"/api/drops/{did}/me", headers=b["h"])).json()
+            me = (await self.get(f"/api/drops/{did}/me", headers=b["h"])).json()
             if me.get("offer"):
                 offers.append((b, me["offer"]))
         if offers and d.get("seat_selection"):
