@@ -1,6 +1,6 @@
 # Member 4 tools
 
-Install the shared package with `pip install -e common` before running the tools.
+Install the shared package and the API requirements with `pip install -e common -r api/requirements.txt` before running the tools.
 
 ## Attack harness
 

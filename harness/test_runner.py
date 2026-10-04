@@ -109,3 +109,12 @@ def test_published_exclusions_bind_rules_and_populate_counts():
     api.request.return_value = httpx.Response(200, content=blob, headers={'X-Fairdrop-Exclusions-Sha256': '0' * 64})
     with pytest.raises(RuntimeError, match='hash'):
         asyncio.run(runner._published_exclusions(api, drop, users))
+
+
+def test_profiles_get_synthetic_subnets():
+    import ipaddress
+    _, users = load_users(Path('harness/profiles.yaml'))
+    net = lambda p: {str(ipaddress.ip_network(f"{u['ip']}/24", strict=False)) for u in users if u['profile'] == p}
+    assert len(net('sybil_cluster')) == 1 and len(net('speed_bots')) == 1
+    assert len(net('honest_singles')) == 30 and len(net('honest_groups')) == 6
+    assert all(u['ip'] is None for u in users if u['profile'] == 'replay')

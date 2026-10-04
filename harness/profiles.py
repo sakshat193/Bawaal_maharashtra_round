@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import ipaddress
+
 import yaml
 
 
@@ -11,6 +13,18 @@ EXPECTED_PROFILES = {
     "honest_singles", "honest_groups", "speed_bots", "broker", "sybil_cluster",
     "replay", "forged_redeem", "double_redeem", "late_payer", "payment_failer", "reconnect",
 }
+
+
+def _ip(name: str, spec: dict, index: int) -> str | None:
+    """Synthetic client address: `per_subnet` users share each /24 of `subnet_pool`. Local demo only."""
+    if not spec.get("subnet_pool"):
+        return None
+    pool = ipaddress.ip_network(spec["subnet_pool"])
+    per = max(1, int(spec.get("per_subnet", 1)))
+    address = ipaddress.ip_address(int(pool.network_address) + (index // per) * 256 + index % per + 1)
+    if address not in pool:
+        raise ValueError(f"{name}: subnet_pool {pool} is too small for {index + 1} users")
+    return str(address)
 
 
 def load_users(path: Path) -> tuple[dict, list[dict]]:
@@ -46,6 +60,7 @@ def load_users(path: Path) -> tuple[dict, list[dict]]:
                 "bot": bool(spec.get("bot", False)),
                 "cohort": spec.get("cohort", name),
                 "group_id": f"{name}-{index // max(1, int(spec.get('group_size', 1)))}" if spec.get("group_size") else None,
+                "ip": _ip(name, spec, index),
                 "arrival": spec.get("arrival", "normal"),
                 "action": spec.get("action"),
                 "risk": {

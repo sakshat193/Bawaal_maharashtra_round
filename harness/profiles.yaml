@@ -7,6 +7,8 @@ profiles:
     bot: false
     cohort: singles
     account_age_days: 365
+    subnet_pool: 100.64.0.0/16
+    per_subnet: 1
   honest_groups:
     count: 30
     quantity: 1
@@ -15,6 +17,8 @@ profiles:
     cohort: groups
     group_size: 5
     account_age_days: 365
+    subnet_pool: 100.65.0.0/16
+    per_subnet: 5
   speed_bots:
     count: 20
     quantity: 1
@@ -22,12 +26,16 @@ profiles:
     bot: true
     arrival: first
     account_age_days: 365
+    subnet_pool: 203.0.113.0/24
+    per_subnet: 20
   broker:
     count: 10
     quantity: 4
     tier_id: main
     bot: true
     account_age_days: 365
+    subnet_pool: 198.51.100.0/24
+    per_subnet: 10
   sybil_cluster:
     count: 6
     quantity: 1
@@ -36,6 +44,8 @@ profiles:
     shared_device_hash: harness-sybil-device
     shared_payment_fingerprint: harness-sybil-payment
     account_age_days: 365
+    subnet_pool: 192.0.2.0/24
+    per_subnet: 6
   replay:
     count: 1
     quantity: 1

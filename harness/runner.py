@@ -105,7 +105,7 @@ async def _register(api: FairDropApi, drop: dict, user: dict, pool: ProcessPoolE
         if pow_proof is not None:
             body["pow"] = pow_proof
         response = await api.request(
-            "POST", f"/api/drops/{drop['drop_id']}/entries", token=user["token"], body=body
+            "POST", f"/api/drops/{drop['drop_id']}/entries", token=user["token"], body=body, ip=user.get("ip")
         )
         if response.is_error:
             data = api.payload(response)

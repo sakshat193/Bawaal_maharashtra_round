@@ -14,12 +14,14 @@ class FairDropApi:
     async def close(self):
         await self.http.aclose()
 
-    async def request(self, method: str, path: str, *, body=None, token=None, admin=False):
+    async def request(self, method: str, path: str, *, body=None, token=None, admin=False, ip=None):
         headers = {}
         if token:
             headers["Authorization"] = f"Bearer {token}"
         if admin:
             headers["X-Admin-Key"] = self.admin_key
+        if ip:  # honoured only where the server lists the sender in TRUSTED_PROXIES (local demo)
+            headers["X-Forwarded-For"] = ip
         response = await self.http.request(
             method, f"{self.base_url}/{path.lstrip('/')}", headers=headers, json=body
         )
