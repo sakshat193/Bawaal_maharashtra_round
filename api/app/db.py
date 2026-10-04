@@ -13,6 +13,7 @@ def get_pool() -> ConnectionPool:
         _pool = ConnectionPool(
             get_settings().database_url, min_size=2, max_size=20,
             kwargs={"row_factory": dict_row, "autocommit": True}, open=True,
+            check=ConnectionPool.check_connection,
         )
         _pool.wait(timeout=30)
     return _pool
