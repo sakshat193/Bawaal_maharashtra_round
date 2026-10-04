@@ -1,37 +1,50 @@
-import { useSearchParams } from 'react-router-dom';
-import { useConcertStore } from './store.js';
-import { Home, Saved, Tickets } from './Home.jsx';
-import { Event, Queue, Turn, Checkout, Done } from './Flow.jsx';
-import { TopNav, TabBar, QuickView, HumanCheck, Toast } from './Overlays.jsx';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import Grain from '../../components/Grain.jsx';
+import { useDrops } from '../../api/hooks.js';
+import { messageForError } from '../../api/messages.js';
+import { Home, Saved } from './Home.jsx';
 
-/**
- * Consumer ticketing app. Responsive: top nav + split layouts ≥900px,
- * bottom tab bar, bottom sheets and sticky buy bar below.
- * URL options: ?speed=2 (queue speed) · ?checks=off|normal|frequent · ?lite=1 (no 3D)
- */
 export default function ConcertApp() {
-  const [params] = useSearchParams();
-  const st = useConcertStore({ queueSpeed: parseFloat(params.get('speed')) || 1, humanChecks: params.get('checks') || 'normal' });
-  const { S } = st;
-  const home = S.phase === 'home';
+  const { data, error } = useDrops();
+  const [tab, setTab] = useState('home');
+  const [query, setQuery] = useState('');
+  const [saved, setSaved] = useState({});
+  const drops = Array.isArray(data?.drops) ? data.drops : [];
+  const toggleSave = dropId => setSaved(current => ({ ...current, [dropId]: !current[dropId] }));
+
   return (
     <div className="c-shell">
-      <TopNav st={st} />
+      <header className="c-nav">
+        <div className="c-nav-in">
+          <Link className="c-brand" to="/" aria-label="Fair Drop home"><i /><b>FAIR DROP</b></Link>
+          <nav className="c-tabs only-d" aria-label="Main navigation">
+            <button className={`c-tab${tab === 'home' ? ' on' : ''}`} onClick={() => setTab('home')}>Home</button>
+            <button className={`c-tab${tab === 'saved' ? ' on' : ''}`} onClick={() => setTab('saved')}>Saved</button>
+          </nav>
+          <label className="c-search only-d">
+            <span className="lens" />
+            <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search drops and venues" />
+          </label>
+          <div className="c-nav-r">
+            <Link className="c-iconbtn" to="/demo">Demo</Link>
+          </div>
+        </div>
+        <div className="c-search only-m" style={{ maxWidth: 'none', width: 'auto', margin: '0 var(--pad) 12px' }}>
+          <span className="lens" />
+          <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search drops and venues" />
+        </div>
+      </header>
       <main className="c-main">
-        {home && S.tab === 'home' && <Home st={st} />}
-        {home && S.tab === 'saved' && <Saved st={st} />}
-        {home && S.tab === 'tickets' && <Tickets st={st} />}
-        {S.phase === 'event' && <Event st={st} />}
-        {S.phase === 'queue' && <Queue st={st} />}
-        {S.phase === 'turn' && <Turn st={st} />}
-        {S.phase === 'checkout' && <Checkout st={st} />}
-        {S.phase === 'done' && <Done st={st} />}
+        {error && !data && <p role="alert">{messageForError(error)}</p>}
+        {!data && !error && <p role="status" style={{ padding: '40px 0' }}>Loading drops…</p>}
+        {data && tab === 'home' && <Home drops={drops} saved={saved} onToggleSave={toggleSave} query={query} />}
+        {data && tab === 'saved' && <Saved drops={drops} saved={saved} onToggleSave={toggleSave} query={query} />}
       </main>
-      {home && <TabBar st={st} />}
-      <QuickView st={st} />
-      {S.check && <HumanCheck st={st} />}
-      <Toast msg={st.toast} />
+      <nav className="c-tabbar only-m" aria-label="Main navigation">
+        <button className={tab === 'home' ? 'on' : ''} onClick={() => setTab('home')}><i />Home</button>
+        <button className={tab === 'saved' ? 'on' : ''} onClick={() => setTab('saved')}><i />Saved</button>
+      </nav>
       <Grain />
     </div>
   );

@@ -1,168 +1,226 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { createJudgeScenes } from '../three/judgeScenes.js';
+import fallbackResults from '../../../contracts/fixtures/results.json';
 import Grain from '../components/Grain.jsx';
-import { prefersReduced } from '../lib/constants.js';
+import { useDrops, useInvariants } from '../api/hooks.js';
+import { messageForError } from '../api/messages.js';
+import { createJudgeScenes } from '../three/judgeScenes.js';
+import { isLite, prefersReduced } from '../lib/constants.js';
+import { invariantFailures, resultsShapeError, sceneCounts, summarizeMode, viewMode } from './dashboardData.js';
 
-const D = "'Big Shoulders Display', sans-serif";
-const label = { fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#7A7A8C' };
+const MODES = [
+  ['naive_fcfs', 'Naive first come'],
+  ['hardened_fcfs', 'Hardened first come'],
+  ['lottery_wil', 'Fair Drop lottery']
+];
 
-/** Screen 8 — naive FIFO vs Fair Drop under the same attack. Figures are a simulated replay. */
-function useScenario() {
-  return useMemo(() => {
-    let s = 0x5eed; const r = () => (s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296;
-    const fifoBots = Array.from({ length: 500 }, (_, i) => (i < 440 ? r() < 0.985 : r() < 0.8));
-    const fb = new Set(); while (fb.size < 14) fb.add(Math.floor(r() * 500));
-    const fairBots = Array.from({ length: 500 }, (_, i) => fb.has(i));
-    const fairOrder = Array.from({ length: 500 }, (_, i) => i);
-    for (let i = 499; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [fairOrder[i], fairOrder[j]] = [fairOrder[j], fairOrder[i]]; }
-    const lat = Array.from({ length: 48 }, (_, i) => 150 + 25 * Math.sin(i * 0.7) + r() * 30 + (i > 2 && i < 8 ? 60 - (i - 2) * 9 : 0));
-    const spark = lat.map((v, i) => (i * 480 / 47).toFixed(1) + ',' + (80 - (v - 50) / 250 * 60).toFixed(1)).join(' ');
-    return { fifoBots, fairBots, fairOrder, spark };
-  }, []);
+function validResults(value) {
+  return resultsShapeError(value) === null;
 }
 
-function SeatGrid({ cells }) {
+function SeatGrid({ view }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(50,minmax(0,1fr))', gap: 2, maxWidth: 560 }}>
-      {cells.map((c, i) => <div key={i} style={{ aspectRatio: '1 / 1', background: c }} />)}
+    <div className="fd-seat-profiles" aria-label={`Ticket allocation grid, one dot equals ${view.unitSize} tickets`}>
+      {view.profiles.map(profile => (
+        <div className="fd-seat-profile" key={profile.name}>
+          <div><span>{profile.name.replaceAll('_', ' ')}</span><b>{profile.tickets.toLocaleString('en-IN')}</b></div>
+          <div className="fd-seat-dots" role="img" aria-label={`${profile.tickets} tickets, ${profile.classification} profile${profile.group ? ', group' : ''}`}>
+            {Array.from({ length: profile.dots }, (_, index) => (
+              <i key={index} className={`${profile.classification}${profile.group ? ' group' : ''}`} aria-hidden="true" style={{ background: profile.classification === 'unknown' ? '#8A8A9A' : undefined }} />
+            ))}
+          </div>
+        </div>
+      ))}
+      {!view.profiles.length && <p>No ticket profiles were published.</p>}
     </div>
   );
 }
 
-export default function JudgeDashboard() {
-  const sc = useScenario();
-  const [p, setP] = useState(0);
-  const [cap, setCap] = useState(true);
-  const [claimed, setClaimed] = useState(0);
-  const capRef = useRef(cap); capRef.current = cap;
-  const cloudEl = useRef(), arenaEl = useRef(), eng = useRef(), rep = useRef();
+function ModeCard({ title, mode }) {
+  const summary = summarizeMode(mode);
+  const view = viewMode(mode);
+  const botPercent = summary.botTicketShare * 100;
+  return (
+    <article className="fd-dashboard-card">
+      <header><h2>{title}</h2><span>{summary.tickets.toLocaleString('en-IN')} tickets</span></header>
+      <div className="fd-dash-share" aria-label={`${botPercent.toFixed(1)} percent of tickets assigned to bot profiles`}>
+        <i className="honest" style={{ width: `${100 - botPercent}%` }} />
+        <i className="bot" style={{ width: `${botPercent}%` }} />
+      </div>
+      <p className="fd-dash-caption">Bot ticket share <b>{botPercent.toFixed(1)}%</b> · published by the results producer</p>
+      <SeatGrid view={view} />
+      {summary.unknownTickets > 0 && <p className="fd-dash-caption">{summary.unknownTickets.toLocaleString('en-IN')} tickets cannot be classified; their profiles are neutral.</p>}
+      <p className="fd-dash-caption">Mode invariants: {mode.invariants.held_within_capacity && mode.invariants.held_matches_active_offers && mode.invariants.oversell === 0 && mode.invariants.double_redemption === 0 ? 'All clear' : 'Fail'}</p>
+      {mode.attack_checks && <ul>{Object.entries(mode.attack_checks).map(([name,check]) => <li key={name}>{name}: {check.passed ? 'Pass' : 'Fail'}</li>)}</ul>}
+      {Object.entries(mode.profiles).map(([name,profile]) => profile.attack_checks ? <ul key={name}>{Object.entries(profile.attack_checks).map(([checkName,check]) => <li key={checkName}>{name} ? {checkName}: {check.passed ? 'Pass' : 'Fail'}</li>)}</ul> : null)}
+      <small className="fd-dash-caption">1 dot = {view.unitSize.toLocaleString('en-IN')} ticket{view.unitSize === 1 ? '' : 's'}</small>
+    </article>
+  );
+}
 
-  const replay = () => {
-    clearInterval(rep.current);
-    const t0 = Date.now();
-    rep.current = setInterval(() => {
-      const k = Math.min(1, (Date.now() - t0) / 3200);
-      setP(1 - Math.pow(1 - k, 2));
-      if (k >= 1) clearInterval(rep.current);
-    }, 60);
-  };
+function InvariantsPanel({ invariants, error, loading = false }) {
+  const failures = invariantFailures(invariants);
+  const state = error ? 'unavailable' : failures === null ? (loading ? 'loading' : 'unavailable') : failures.length ? 'fail' : 'pass';
+  const number = value => Number.isSafeInteger(value) && value >= 0 ? value.toLocaleString('en-IN') : 'Invalid';
+  return (
+    <section className={`fd-invariants ${state}`} aria-labelledby="invariants-title">
+      <div className="fd-panel-heading">
+        <div><p className="c-kicker">Live API check</p><h2 id="invariants-title" className="c-h2">Inventory invariants</h2></div>
+        <b>{state === 'pass' ? 'All clear' : state === 'fail' ? 'Needs attention' : state === 'loading' ? 'Loading' : 'Invariants unavailable'}</b>
+      </div>
+      {error && <p role="alert" className="fd-error">{messageForError(error)}</p>}
+      {!error && failures !== null && <>
+        <div className="fd-invariant-table">
+          <div><b>Tier</b><b>Held</b><b>Active</b><b>Capacity</b></div>
+          {invariants.tiers.map((tier,index) => <div key={tier?.tier_id || index}>
+            <span>{tier?.tier_id || 'Unnamed tier'}</span><span>{number(tier?.held)}</span>
+            <span>{number(tier?.active_offer_units)}</span><span>{number(tier?.capacity)}</span>
+          </div>)}
+        </div>
+        <p>Oversell: {number(invariants.oversell)} ? Held mismatch: {number(invariants.held_mismatch)} ? Double redemption: {number(invariants.double_redemption)}</p>
+        {failures.length > 0 && <ul>{failures.map(failure => <li key={failure}>{failure}</li>)}</ul>}
+      </>}
+    </section>
+  );
+}
+
+export default function JudgeDashboard() {
+  const [results, setResults] = useState(fallbackResults);
+  const [resultsSource, setResultsSource] = useState('fixture');
+  const [resultsReason, setResultsReason] = useState('Loading results.json');
+  const [dropId, setDropId] = useState('');
+  const cloudEl = useRef(null);
+  const arenaEl = useRef(null);
+  const engine = useRef(null);
+  const drops = useDrops();
+  const dropList = drops.data?.drops || [];
+  const selectedDropId = dropId || dropList[0]?.drop_id || '';
+  const selectedDrop = dropList.find(drop => drop.drop_id === selectedDropId);
+  const invariants = useInvariants(selectedDropId, selectedDrop?.phase);
+  const lottery = results.modes.find(mode => mode.mode === 'lottery_wil');
+  const lotterySummary = summarizeMode(lottery);
+  const sceneData = useMemo(() => sceneCounts(lottery), [lottery]);
+  const lite = isLite();
 
   useEffect(() => {
-    replay();
-    eng.current = createJudgeScenes(cloudEl.current, arenaEl.current, { reduced: prefersReduced(), getCap: () => capRef.current, onClaimed: setClaimed });
-    return () => { clearInterval(rep.current); eng.current.dispose(); };
+    const controller = new AbortController();
+    fetch(`${import.meta.env.BASE_URL}results.json`, { signal: controller.signal })
+      .then(response => {
+        if (!response.ok) throw new Error(response.status === 404 ? 'results.json not found' : `results.json HTTP ${response.status}`);
+        return response.json();
+      })
+      .then(value => {
+        if (!validResults(value)) throw new Error(`invalid shape: ${resultsShapeError(value)}`);
+        setResults(value);
+        setResultsSource('results.json');
+        setResultsReason('');
+      })
+      .catch(reason => {
+        if (reason.name !== 'AbortError') {
+          setResults(fallbackResults);
+          setResultsSource('fixture');
+          setResultsReason(reason.message || 'results.json unavailable');
+        }
+      });
+    return () => controller.abort();
   }, []);
-  useEffect(() => { eng.current?.redraw(); }, [cap]);
 
-  const n = Math.round(p * 500);
-  const fairFilled = new Set(sc.fairOrder.slice(0, n));
-  let fb = 0, rb = 0;
-  const fifoCells = [], fairCells = [];
-  for (let i = 0; i < 500; i++) {
-    const f = i < n; if (f && sc.fifoBots[i]) fb++;
-    fifoCells.push(!f ? 'rgba(255,255,255,0.06)' : sc.fifoBots[i] ? '#F59E0B' : '#67E8F9');
-    const g = fairFilled.has(i); if (g && sc.fairBots[i]) rb++;
-    fairCells.push(!g ? 'rgba(255,255,255,0.06)' : sc.fairBots[i] ? '#F59E0B' : '#67E8F9');
-  }
-  const pct = a => (n ? (a / n * 100).toFixed(1) + '%' : '—');
-  const big = (glow) => ({ fontFamily: D, fontWeight: 900, fontSize: 'clamp(96px,11vw,180px)', lineHeight: 0.85, fontVariantNumeric: 'tabular-nums', textShadow: `-0.012em 0 rgba(255,46,99,0.5), 0.012em 0 rgba(34,211,238,0.5), 0 0 0.16em ${glow}` });
+  useEffect(() => {
+    if (lite) return undefined;
+    const active = createJudgeScenes(cloudEl.current, arenaEl.current, {
+      reduced: prefersReduced(),
+      data: sceneData
+    });
+    engine.current = active;
+    return () => {
+      active.dispose();
+      engine.current = null;
+    };
+  }, [lite]);
+
+  useEffect(() => { engine.current?.setData(sceneData); }, [sceneData]);
+
+  const ratio = lotterySummary.botShareRatio;
+  const groups = lotterySummary.groupsVsSingles;
+  const groupTotal = groups.group_members + groups.singles;
+  const groupShare = groupTotal ? groups.group_members / groupTotal * 100 : 0;
+  const exclusions = lotterySummary.exclusions;
 
   return (
-    <div style={{ position: 'relative', minHeight: '100vh', background: '#0A0A0F', color: '#ECEBF3', fontFamily: "'JetBrains Mono', monospace", overflow: 'hidden' }}>
-      <header style={{ position: 'relative', zIndex: 2, display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '16px 32px', padding: '22px clamp(20px,4vw,56px)', borderBottom: '1px solid rgba(255,255,255,0.06)', ...label, color: '#ECEBF3', letterSpacing: '0.16em' }}>
-        <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 9, height: 9, background: '#7C3AED', boxShadow: '0 0 10px rgba(124,58,237,0.9)' }} />
-          <div style={{ fontFamily: D, fontWeight: 800, fontSize: 22, letterSpacing: '0.1em', color: '#F1EEFF' }}>FAIR DROP</div>
-          <div style={{ color: '#7A7A8C' }}>Judges · Attack replay</div>
-        </Link>
-        <div style={{ display: 'flex', gap: 22 }}><Link to="/drop" style={{ color: '#8A8A9A' }}>The drop</Link><Link to="/verify" style={{ color: '#8A8A9A' }}>Verify</Link></div>
+    <div className="c-shell fd-dashboard">
+      <header className="c-nav">
+        <div className="c-nav-in">
+          <Link className="c-brand" to="/" aria-label="Fair Drop home"><i /><b>FAIR DROP</b></Link>
+          <nav className="c-nav-r" aria-label="Fair Drop links">
+            <Link className="c-iconbtn" to="/verify">Verify</Link>
+            <Link className="c-iconbtn" to="/demo">Demo controls</Link>
+          </nav>
+        </div>
       </header>
-
-      <main style={{ position: 'relative', zIndex: 2, display: 'flex', flexDirection: 'column', gap: 56, padding: '40px clamp(20px,4vw,56px) 64px' }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: '20px 40px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={label}>Scenario · 49,812 people · 12 bot operators · 180,000 scripted requests · 500 seats</div>
-            <div style={{ fontFamily: D, fontWeight: 800, fontSize: 'clamp(44px,5.5vw,84px)', lineHeight: 0.9, textTransform: 'uppercase', color: '#F1EEFF' }}>Same attack. Two systems.</div>
-          </div>
-          <button onClick={replay} style={{ fontFamily: D, fontWeight: 800, fontSize: 22, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#DDD6FE', border: '1px solid rgba(167,139,250,0.5)', padding: '14px 26px', whiteSpace: 'nowrap' }}>Replay attack</button>
+      <main className="c-main fd-dashboard-main">
+        <div className="fd-dashboard-title">
+          <div><p className="c-kicker">Fair Drop · evidence dashboard</p><h1 className="c-title">Draw outcomes</h1></div>
+          <span>Results source: {resultsSource}{results.source === 'live_harness' ? '' : ' | illustrative'}{resultsReason && ` | ${resultsReason}`}</span>
         </div>
 
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '40px 56px' }}>
-          {[
-            { title: 'Naive FIFO · fastest wins', color: '#FBBF24', line: 'rgba(245,158,11,0.35)', val: pct(fb), cells: fifoCells, ink: '#FFF4DC', glow: 'rgba(245,158,11,0.6)', note: 'First request wins. The bots fire 180,000 requests in the first 40 ms. Most people are still loading the page.', verb: 'sold' },
-            { title: 'Fair Drop · sealed lottery', color: '#67E8F9', line: 'rgba(34,211,238,0.4)', val: pct(rb), cells: fairCells, ink: '#F4FEFF', glow: 'rgba(34,211,238,0.55)', note: "Arrival time is ignored and each subnet's weight is capped. The bots win about as often as a few dozen honest people would.", verb: 'drawn' }
-          ].map(c => (
-            <section key={c.title} style={{ flex: '1 1 420px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, borderTop: `1px solid ${c.line}`, paddingTop: 20 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, ...label, color: c.color }}><span>{c.title}</span><span style={{ color: '#7A7A8C' }}>{n} / 500 {c.verb}</span></div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 18 }}>
-                <div style={{ ...big(c.glow), color: c.ink }}>{c.val}</div>
-                <div style={{ ...label, lineHeight: 1.7, color: '#8A8A9A' }}>of seats<br />to bots</div>
-              </div>
-              <SeatGrid cells={c.cells} />
-              <div style={{ fontSize: 12, lineHeight: 1.65, color: '#8A8A9A', maxWidth: 520 }}>{c.note}</div>
-            </section>
-          ))}
-        </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px 28px', ...label, fontSize: 10, color: '#8A8A9A', marginTop: -32 }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ width: 8, height: 8, background: '#F59E0B' }} />Bot-held seat</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ width: 8, height: 8, background: '#67E8F9' }} />Person</span>
-        </div>
+        <section className="fd-modes" aria-label="Bot ticket share by allocation mode">
+          {MODES.map(([id, title]) => <ModeCard key={id} title={title} mode={results.modes.find(mode => mode.mode === id)} />)}
+        </section>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,300px),1fr))', gap: '32px 48px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 28 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ ...label, fontSize: 10 }}>Gini · seats per /24 subnet</div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 18 }}>
-              <div style={{ fontFamily: D, fontWeight: 900, fontSize: 'clamp(96px,9vw,150px)', lineHeight: 0.85, color: '#F4FEFF', textShadow: '0 0 0.16em rgba(34,211,238,0.45)' }}>{p < 0.01 ? '—' : (0.06 + 0.91 * (1 - p)).toFixed(2)}</div>
-              <div style={{ ...label, lineHeight: 1.7, color: '#8A8A9A' }}>FIFO<br /><span style={{ color: '#FBBF24' }}>{(0.97 * p).toFixed(2)}</span></div>
-            </div>
-            <div style={{ fontSize: 11, color: '#7A7A8C' }}>0 = perfectly even · 1 = one subnet takes everything</div>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ ...label, fontSize: 10 }}>Oversell</div>
-            <div style={{ fontFamily: D, fontWeight: 900, fontSize: 'clamp(96px,9vw,150px)', lineHeight: 0.85, color: '#F1EEFF' }}>0</div>
-            <div style={{ fontSize: 11, color: '#7A7A8C' }}>Pinned at 0 across 2,000 replays · 50k concurrent claims</div>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ ...label, fontSize: 10 }}>p99 latency · registration</div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}><div style={{ fontFamily: D, fontWeight: 800, fontSize: 64, lineHeight: 0.9, color: '#F1EEFF' }}>182</div><div style={{ fontSize: 12, color: '#8A8A9A' }}>ms</div></div>
-            <svg viewBox="0 0 480 80" preserveAspectRatio="none" style={{ width: '100%', height: 80, overflow: 'visible' }}>
-              <line x1="0" y1="20" x2="480" y2="20" stroke="rgba(245,158,11,0.4)" strokeDasharray="3 5" strokeWidth="1" />
-              <polyline points={sc.spark} fill="none" stroke="#C4B5FD" strokeWidth="1.5" style={{ filter: 'drop-shadow(0 0 4px rgba(124,58,237,0.9))' }} />
-            </svg>
-            <div style={{ display: 'flex', justifyContent: 'space-between', ...label, fontSize: 10 }}><span>Open</span><span style={{ color: '#FBBF24' }}>SLO 300 ms</span><span>Sealed</span></div>
-          </div>
-        </div>
+        <section className="fd-dashboard-metrics" aria-label="Lottery metrics">
+          <article className="fd-dashboard-card">
+            <p className="c-kicker">Bot share ratio</p>
+            <strong>{ratio.toFixed(2)}×</strong>
+            <p className="fd-dash-caption">Bot ticket share ÷ bot identity share</p>
+            <div className="fd-share-pair"><span>Tickets {(lotterySummary.botTicketShare * 100).toFixed(1)}%</span><span>Identities {(lotterySummary.botIdentityShare * 100).toFixed(1)}%</span></div>
+          </article>
+          <article className="fd-dashboard-card">
+            <p className="c-kicker">Groups and singles</p>
+            <div className="fd-dash-share"><i className="group" style={{ width: `${groupShare}%` }} /><i className="single" style={{ width: `${100 - groupShare}%` }} /></div>
+            <div className="fd-share-pair"><span>{groups.group_members.toLocaleString('en-IN')} group tickets</span><span>{groups.singles.toLocaleString('en-IN')} single tickets</span></div>
+            <p className="fd-dash-caption">Published group/single ratio: {groups.ratio === null ? 'Unavailable' : groups.ratio}</p>
+          </article>
+          <article className="fd-dashboard-card">
+            <p className="c-kicker">Exclusions by rule</p>
+            {exclusions.length
+              ? <ul className="fd-exclusion-list">{exclusions.map(item => <li key={item.rule}><span>{item.rule.replaceAll('_', ' ')}</span><b>{item.count.toLocaleString('en-IN')}</b></li>)}</ul>
+              : <p className="fd-dash-caption">No exclusions were published.</p>}
+          </article>
+        </section>
 
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '32px 48px' }}>
-          <section style={{ flex: '1 1 440px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-              <div style={{ ...label, color: '#ECEBF3' }}>Entries by IP subnet</div>
-              <div style={{ display: 'flex', border: '1px solid rgba(255,255,255,0.12)' }}>
-                <button onClick={() => setCap(false)} style={{ ...label, fontSize: 10, letterSpacing: '0.14em', padding: '8px 12px', background: !cap ? 'rgba(245,158,11,0.14)' : 'transparent', color: !cap ? '#FBBF24' : '#8A8A9A' }}>No cap</button>
-                <button onClick={() => setCap(true)} style={{ ...label, fontSize: 10, letterSpacing: '0.14em', padding: '8px 12px', background: cap ? 'rgba(34,211,238,0.14)' : 'transparent', color: cap ? '#67E8F9' : '#8A8A9A' }}>Weight cap on</button>
-              </div>
-            </div>
-            <div style={{ position: 'relative', width: '100%', aspectRatio: '16 / 11', border: '1px solid rgba(255,255,255,0.06)' }}>
-              <div ref={cloudEl} style={{ position: 'absolute', inset: 0 }} />
-              <div style={{ position: 'absolute', left: 16, bottom: 14, display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11, pointerEvents: 'none' }}>
-                <span style={{ color: '#FBBF24' }}>45.133.x.x/16 · 4,812 entries</span>
-                <span style={{ color: '#8A8A9A' }}>{cap ? 'Capped · counts as weight 32' : 'Uncapped · counts as 4,812 entries'}</span>
-              </div>
-            </div>
-            <div style={{ fontSize: 12, lineHeight: 1.6, color: '#8A8A9A' }}>A Sybil attack shows up as a spike: thousands of entries from one place. With the cap on, the whole spike counts for about as much as a busy apartment block.</div>
-          </section>
-          <section style={{ flex: '1 1 440px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, minHeight: 34 }}>
-              <div style={{ ...label, color: '#ECEBF3' }}>The arena · live redemptions</div>
-              <div style={{ ...label, color: '#FBBF24', fontVariantNumeric: 'tabular-nums' }}>{claimed} / 500 claimed</div>
-            </div>
-            <div style={{ position: 'relative', width: '100%', aspectRatio: '16 / 11', border: '1px solid rgba(255,255,255,0.06)' }}>
-              <div ref={arenaEl} style={{ position: 'absolute', inset: 0 }} />
-            </div>
-            <div style={{ fontSize: 12, lineHeight: 1.6, color: '#8A8A9A' }}>Each tile is one of the 500 seats. A tile lights up when its winner claims it. Holds that expire pass to the next ticket in the published order.</div>
-          </section>
-        </div>
+        <section className="fd-judge-scenes" aria-label="Lottery visual summaries">
+          <article className="fd-dashboard-card">
+            <h2>Entry profile</h2>
+            {!lite
+              ? <div ref={cloudEl} className="fd-judge-canvas" role="img" aria-label={`${sceneData.honest} honest entries, ${sceneData.bots} bot entries and ${sceneData.unknown} unclassified entries`} />
+              : <div className="fd-judge-static"><span>{sceneData.honest.toLocaleString('en-IN')} honest entries</span><span>{sceneData.bots.toLocaleString('en-IN')} bot entries</span><span>{sceneData.unknown.toLocaleString('en-IN')} unclassified entries</span></div>}
+            {sceneData.unknown > 0 && <p className="fd-dash-caption">{sceneData.unknown} entries cannot be classified and are shown neutral.</p>}
+            <p className="fd-dash-caption">1 point = {Math.max(1, Math.ceil(Math.max(sceneData.honest + sceneData.bots + sceneData.unknown, sceneData.seats) / 6000)).toLocaleString('en-IN')} entries</p>
+          </article>
+          <article className="fd-dashboard-card">
+            <h2>Allocated tickets</h2>
+            {!lite
+              ? <div ref={arenaEl} className="fd-judge-canvas" role="img" aria-label={`${sceneData.seats} tickets allocated in the lottery results`} />
+              : <div className="fd-judge-static"><span>{sceneData.seats.toLocaleString('en-IN')} lottery tickets</span><span>Inventory remains governed by the live API below.</span></div>}
+            <p className="fd-dash-caption">Allocation visualization uses lottery results; current inventory is checked live below.</p>
+          </article>
+        </section>
+
+        <section className="fd-inventory-live">
+          <div className="fd-panel-heading">
+            <div><p className="c-kicker">Live API check</p><h2 className="c-h2">Current inventory</h2></div>
+            {dropList.length > 0 && (
+              <label className="fd-label">Drop
+                <select value={selectedDropId} onChange={event => setDropId(event.target.value)}>
+                  {dropList.map(drop => <option key={drop.drop_id} value={drop.drop_id}>{drop.name} · {drop.phase}</option>)}
+                </select>
+              </label>
+            )}
+          </div>
+          {drops.error && <p role="alert" className="fd-error">{messageForError(drops.error)}</p>}
+          {!selectedDropId && !drops.error && <p role="status">Loading drops…</p>}
+          <InvariantsPanel invariants={invariants.data} error={invariants.error} loading={invariants.loading} />
+        </section>
       </main>
       <Grain opacity={0.07} />
     </div>

@@ -1,0 +1,5 @@
+{
+  "error": "payment_window_closed",
+  "message": "The payment window has closed.",
+  "refund": true
+}
