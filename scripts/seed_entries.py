@@ -7,7 +7,7 @@ build the draw against realistic volume. Owner: Member 2.
 
 Uses DATABASE_URL (default: the compose Postgres on localhost:5433). The seal uses a
 DEV-ONLY clock "timestamp" unless --real-timestamp is given; never use the dev stamp
-for a drop anyone will verify. Round R is due about two minutes after the seal, so the
+for a drop anyone will verify. Round R is due about 90 seconds after the seal, so the
 draw has to wait for it like a real one.
 """
 import argparse
