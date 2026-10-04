@@ -14,6 +14,8 @@ The harness creates naive FCFS, hardened FCFS, and WIL drops. It logs in each sy
 
 The harness calls `common.fairdrop_common.pow.solve` in a process pool when a drop requires proof-of-work. Use `--pow-bits`, `--workers`, and `--concurrency` to tune a local run. The payment test tier reserves offers for the adversarial payment checks. Fairness metrics include this tier.
 
+The default demo run uses 4 PoW bits, 16 sub-puzzles and 2048 KiB per puzzle, with a 180-second registration window for all three populations. Higher difficulty needs enough workers to finish before the published close; a late entry fails the run. The configured values are public in each created drop.
+
 ## Fixture server
 
 Run the fixture server with:

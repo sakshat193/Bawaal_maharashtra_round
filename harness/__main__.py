@@ -16,7 +16,7 @@ def main() -> int:
     parser.add_argument("--out", type=Path, default=Path("frontend/public/results.json"))
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--concurrency", type=int, default=32)
-    parser.add_argument("--pow-bits", type=int, default=8)
+    parser.add_argument("--pow-bits", type=int, default=4)
     args = parser.parse_args()
     if args.workers < 1 or args.concurrency < 1 or args.pow_bits < 0:
         parser.error("workers/concurrency must be positive and pow-bits cannot be negative")

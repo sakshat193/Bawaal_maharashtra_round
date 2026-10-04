@@ -216,7 +216,7 @@ def _summarize(mode: str, users: list[dict], outcomes: list[dict], invariants: d
     }
 
 
-async def run_harness(base_url: str, profiles_path: Path, out_path: Path, workers: int = 4, concurrency: int = 32, pow_bits: int = 8) -> dict:
+async def run_harness(base_url: str, profiles_path: Path, out_path: Path, workers: int = 4, concurrency: int = 32, pow_bits: int = 4) -> dict:
     admin_key = os.environ.get("ADMIN_KEY")
     if not admin_key:
         raise ValueError("set ADMIN_KEY in the environment before running the live harness")
@@ -228,7 +228,8 @@ async def run_harness(base_url: str, profiles_path: Path, out_path: Path, worker
             async with login_limit:
                 return await _login(api, user)
         users = await asyncio.gather(*(login_limited(user) for user in templates))
-        close_at = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(seconds=60)
+        # Four workers solve two hardened populations before any drop is sealed.
+        close_at = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(seconds=180)
         drops = await asyncio.gather(*(
             _create_mode(api, mode, close_at, pow_bits) for mode in MODES
         ))

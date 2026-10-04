@@ -1,8 +1,14 @@
 from pathlib import Path
+import asyncio
+from datetime import datetime, timezone
+from unittest.mock import AsyncMock
+
+import pytest
 
 from harness.profiles import load_users
 from harness.runner import _solve_pow, _summarize
 from fairdrop_common import pow
+from harness import runner
 
 
 def test_summary_keeps_profile_classification():
@@ -27,3 +33,23 @@ def test_harness_solves_actual_api_challenge_shape():
     parameters = {"challenge": "01" * 32, "bits": 2, "k": 4, "memory_kib": 64}
     nonces = _solve_pow(parameters)
     assert pow.verify(parameters["challenge"], nonces, parameters["bits"], parameters["k"], parameters["memory_kib"])
+
+
+def test_harness_leaves_time_for_the_whole_population(monkeypatch):
+    monkeypatch.setenv("ADMIN_KEY", "test-admin")
+    monkeypatch.setattr(runner, "load_users", lambda path: ({}, [{}]))
+    monkeypatch.setattr(runner, "_login", AsyncMock(return_value={}))
+    monkeypatch.setattr(runner, "FairDropApi", lambda *args: type("Api", (), {"close": AsyncMock()})())
+    deadlines, difficulties = [], []
+
+    async def create(api, mode, close_at, pow_bits):
+        deadlines.append(close_at)
+        difficulties.append(pow_bits)
+        raise RuntimeError("stop before creating network drops")
+
+    monkeypatch.setattr(runner, "_create_mode", create)
+    before = datetime.now(timezone.utc)
+    with pytest.raises(RuntimeError, match="stop before"):
+        asyncio.run(runner.run_harness("http://example.test", Path("unused"), Path("unused")))
+    assert all((deadline - before).total_seconds() >= 179 for deadline in deadlines)
+    assert difficulties == [4, 4, 4]
