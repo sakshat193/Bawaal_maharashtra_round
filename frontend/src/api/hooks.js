@@ -96,3 +96,15 @@ export function useSnapshot(dropId, phase) {
   const load = useCallback(({ signal }) => api(`/api/drops/${encodeURIComponent(dropId)}/snapshot`, { signal, includeHeaders: true }), [dropId]);
   return usePoll(load, [30000, 60000], Boolean(dropId) && ['sealed', 'drawn', 'settled'].includes(phase), dropId);
 }
+
+// Seat selection after the lottery: live seat map (owners hidden) and the caller's own choice.
+export function useSeatMap(dropId, enabled = true) {
+  const load = useCallback(({ signal }) => api(`/api/drops/${encodeURIComponent(dropId)}/seats`, { signal }), [dropId]);
+  return usePoll(load, [1500, 2500], Boolean(dropId) && enabled, dropId);
+}
+
+export function useOfferSeats(offerId, enabled = true) {
+  const identity = useIdentity();
+  const load = useCallback(({ signal }) => api(`/api/offers/${encodeURIComponent(offerId)}/seats`, { signal }), [offerId]);
+  return usePoll(load, [1500, 2500], Boolean(offerId && identity) && enabled, `${offerId}:${identity || ''}`);
+}

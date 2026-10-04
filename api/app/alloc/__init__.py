@@ -197,6 +197,15 @@ async def redeem_offer(
             raise ApiError(409, "not_offered")
         if expires_at <= _now():
             raise ApiError(409, "offer_expired")
+        # Seat-selection drops: Buy requires exactly `quantity` seats locked by this offer.
+        seats = await _one(connection,
+            """SELECT d.seat_selection, o.quantity,
+                      (SELECT count(*) FROM seat_assignments s WHERE s.offer_id = o.offer_id)
+                 FROM offers o JOIN drops d ON d.drop_id = o.drop_id WHERE o.offer_id = %s""",
+            (offer_id,))
+        if seats and seats[0] and seats[2] != seats[1]:
+            raise ApiError(409, "seats_not_selected",
+                           message=f"Choose {seats[1]} seat(s) before buying ({seats[2]} chosen).")
         cursor = await connection.execute(
             """UPDATE offers SET status='payment_pending', order_id=%s,
                       pay_deadline=clock_timestamp() + make_interval(secs => %s)
@@ -367,11 +376,22 @@ async def invariants(drop_id: uuid.UUID, connection: Any = Depends(conn)) -> dic
         (drop_id,))
     if not tiers:
         raise ApiError(404, "not_found")
+    # Seat checks (0 when healthy): a seat held by an inactive offer, a booked seat whose
+    # offer isn't confirmed, a locked seat whose offer is, or an offer holding too many seats.
+    seat_mismatch = await _one(connection,
+        """SELECT
+             (SELECT count(*) FROM seat_assignments s JOIN offers o USING (offer_id)
+               WHERE s.drop_id=%s AND (o.status NOT IN ('offered','payment_pending','confirmed')
+                  OR (s.status='booked') <> (o.status='confirmed')))
+           + (SELECT count(*) FROM (SELECT s.offer_id FROM seat_assignments s JOIN offers o USING (offer_id)
+               WHERE s.drop_id=%s GROUP BY s.offer_id, o.quantity HAVING count(*) > o.quantity) q)""",
+        (drop_id, drop_id))
     return {"tiers": [{"tier_id": r[0], "held": r[1], "active_offer_units": int(r[3]),
                         "capacity": r[2]} for r in tiers],
             "oversell": sum(max(0, r[1]-r[2]) for r in tiers),
             "held_mismatch": sum(abs(r[1]-int(r[3])) for r in tiers),
-            "double_redemption": int(double_offers[0])}
+            "double_redemption": int(double_offers[0]),
+            "seat_mismatch": int(seat_mismatch[0])}
 
 
 @router.post("/admin/drops/{drop_id}/draw", operation_id="adminDraw")
@@ -455,16 +475,27 @@ async def _draw_drop(connection: Any, drop_id: uuid.UUID) -> bool:
         tier_rows = await _all(connection,
             "SELECT tier_id,capacity,held FROM tiers WHERE drop_id=%s ORDER BY tier_id FOR UPDATE", (drop_id,))
         remaining = {tier: capacity-held for tier, capacity, held in tier_rows}
+        # Seat selection (contracts/migrations/001_seats.sql): winners pick seats in
+        # rank-ordered waves per tier. Offer k in a tier opens its seat window
+        # (k // wave_size) * wave_s seconds after the draw, and its deadline moves by the
+        # same amount, so every winner gets a full offer_ttl_s to pick and press Buy.
+        seat_cfg = await _one(connection,
+            "SELECT offer_ttl_s, seat_selection, seat_wave_size, seat_wave_s FROM drops WHERE drop_id=%s",
+            (drop_id,))
+        offer_ttl_s, seat_selection, wave_size, wave_s = seat_cfg
+        offers_in_tier: dict[str, int] = {}
         for entry in ranked:
             tier_id, quantity = entry["tier_id"], entry["quantity"]
             if remaining.get(tier_id, 0) < quantity:
                 continue
             offer_id = uuid.uuid4()
+            k = offers_in_tier.get(tier_id, 0)
+            offers_in_tier[tier_id] = k + 1
+            wave_offset_s = (k // wave_size) * wave_s if seat_selection else 0
             await connection.execute(
                 """INSERT INTO offers(offer_id,drop_id,entry_id,tier_id,quantity,round,status,expires_at)
-                   VALUES(%s,%s,%s,%s,%s,0,'offered',clock_timestamp()+make_interval(secs =>
-                     (SELECT offer_ttl_s FROM drops WHERE drop_id=%s)))""",
-                (offer_id, drop_id, entry["entry_id"], tier_id, quantity, drop_id),
+                   VALUES(%s,%s,%s,%s,%s,0,'offered',clock_timestamp()+make_interval(secs => %s))""",
+                (offer_id, drop_id, entry["entry_id"], tier_id, quantity, offer_ttl_s + wave_offset_s),
             )
             await connection.execute("UPDATE tiers SET held=held+%s WHERE drop_id=%s AND tier_id=%s",
                                      (quantity, drop_id, tier_id))

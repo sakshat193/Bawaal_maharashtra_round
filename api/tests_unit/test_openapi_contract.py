@@ -5,7 +5,7 @@ import yaml
 
 def test_allocation_and_payment_contract_matches_existing_routes():
     contract = yaml.safe_load((Path(__file__).resolve().parents[2] / "contracts/openapi.yaml").read_text(encoding="utf-8"))
-    assert contract["info"]["version"] == "0.2.0"
+    assert contract["info"]["version"] == "0.3.0"  # 0.3.0: seat selection after the lottery
     schemas = contract["components"]["schemas"]
     paths = contract["paths"]
     for path, schema in [("/api/drops/{drop_id}/draw", "Draw"), ("/api/drops/{drop_id}/invariants", "Invariants"), ("/api/offers/{offer_id}/checkout", "Checkout")]:

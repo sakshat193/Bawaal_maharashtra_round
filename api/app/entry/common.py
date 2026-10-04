@@ -11,6 +11,8 @@ CONFIG_FIELDS = (
     "drop_id", "name", "venue", "starts_at", "opens_at", "closes_at", "allocation_mode",
     "pow_required", "turnstile_required", "pow_bits", "pow_k", "pow_memory_kib", "max_quantity",
     "offer_ttl_s", "pay_deadline_s", "max_promotion_rounds", "sybil_rules", "drand_chain", "drand_round",
+    # Seat selection after the lottery (contracts/migrations/001_seats.sql): frozen with the config.
+    "seat_selection", "seat_wave_size", "seat_wave_s",
 )
 TIME_FIELDS = ("starts_at", "opens_at", "closes_at")
 

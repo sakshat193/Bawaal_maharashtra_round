@@ -12,7 +12,13 @@ export const ERROR_MESSAGES = Object.freeze({
   already_redeemed_other_order: 'This offer was already redeemed with another order.',
   not_offered: 'This entry does not have an active offer.',
   payment_window_closed: "Your payment arrived after the window closed. You won't be charged; any charge is refunded.",
-  not_payment_pending: 'This offer is not waiting for payment.'
+  not_payment_pending: 'This offer is not waiting for payment.',
+  seat_taken: 'Someone else has just taken that seat. Please choose another.',
+  seat_window_not_open: "It isn't your turn to choose seats yet.",
+  seats_not_selected: 'Choose your seats before buying.',
+  too_many_seats: 'You have already chosen all your seats. Tap one of yours to swap it.',
+  invalid_seat: 'That seat does not exist in your section.',
+  seat_selection_disabled: 'This drop assigns seats by section only.'
 });
 
 export function messageForError(error) {

@@ -325,3 +325,34 @@
   .fd-judge-canvas, .fd-judge-static { min-height: 240px; }
   .fd-verify-bloom, .fd-verify-bloom-lite { width: 100%; height: 42vh; }
 }
+
+/* Seat selection after the lottery (seats/SeatPicker.jsx) */
+.fd-seatpicker { display: grid; gap: 14px; border: 1px solid rgba(167,139,250,.28); background: #0D0D14; padding: 18px; min-width: 0; }
+.fd-seatpicker-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
+.fd-seat-turn { margin: 6px 0 0; line-height: 1.5; color: var(--ink3, #C9C5D6); }
+.fd-seat-turn.open b { color: #22C55E; }
+.fd-seat-turn.wait b { color: #F59E0B; }
+.fd-seat-viewtoggle { display: inline-flex; border: 1px solid rgba(255,255,255,.14); }
+.fd-seat-viewtoggle button { padding: 8px 12px; font: 12px var(--mono, monospace); color: var(--ink4, #9A96A8); background: none; border: 0; cursor: pointer; }
+.fd-seat-viewtoggle button.on { background: rgba(167,139,250,.18); color: #F4F0FF; }
+.fd-seat3d { position: relative; height: min(62vh, 520px); min-height: 320px; background: radial-gradient(ellipse at center, #15131F 0%, #0A0A10 70%); }
+.fd-seat3d-canvas { position: absolute; inset: 0; }
+.fd-seat3d-controls { position: absolute; right: 10px; bottom: 10px; }
+.fd-seat-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; color: var(--ink4, #9A96A8); font: 11px var(--mono, monospace); }
+.fd-seat-legend > span { display: inline-flex; align-items: center; gap: 7px; }
+.fd-seat-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+.fd-seat-legend i.mine { box-shadow: 0 0 0 2px #fff inset; }
+.fd-seat-hover { margin-left: auto; color: #F4F0FF; }
+.fd-seat-chosen { margin: 0; line-height: 1.5; }
+.fd-seatgrid { display: grid; gap: 4px; overflow-x: auto; padding: 4px 0 8px; max-width: 100%; }
+.fd-seatgrid-row { display: flex; align-items: center; gap: 4px; min-width: max-content; }
+.fd-seatgrid-label { width: 30px; flex: 0 0 30px; color: var(--ink4, #9A96A8); font: 10px var(--mono, monospace); }
+.fd-seat { width: 18px; height: 18px; flex: 0 0 18px; border-radius: 50% 50% 4px 4px; border: 0; padding: 0; cursor: pointer; }
+.fd-seat.available { background: #22C55E; }
+.fd-seat.locked { background: #F59E0B; cursor: not-allowed; }
+.fd-seat.booked { background: #EF4444; cursor: not-allowed; }
+.fd-seat.mine { background: #FCD34D; box-shadow: 0 0 0 2px #fff inset, 0 0 8px rgba(252,211,77,.7); }
+.fd-seat:disabled { cursor: not-allowed; }
+.fd-seat.available:disabled { opacity: .5; }
+.fd-seat:focus-visible { outline: 2px solid #A78BFA; outline-offset: 2px; }
+@media (max-width: 560px) { .fd-seat { width: 22px; height: 22px; flex-basis: 22px; } .fd-seat-hover { margin-left: 0; } }

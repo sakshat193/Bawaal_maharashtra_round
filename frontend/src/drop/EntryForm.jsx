@@ -47,6 +47,13 @@ export default function EntryForm({ drop, tier, quantity, onClose, refresh, onLo
   const controller = useRef(null);
 
   useEffect(() => () => controller.current?.abort(), []);
+  // The form opens below the tier picker; bring it into view so the click visibly does something.
+  const panel = useRef(null);
+  useEffect(() => {
+    const reduce = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    panel.current?.scrollIntoView?.({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+    panel.current?.focus?.({ preventScroll: true });
+  }, []);
 
   async function login(event) {
     event.preventDefault();
@@ -131,7 +138,7 @@ export default function EntryForm({ drop, tier, quantity, onClose, refresh, onLo
   if (accepted) return <Registered drop={drop} receiptResponse={accepted} />;
 
   return (
-    <section className="fd-entry" aria-labelledby="entry-title">
+    <section ref={panel} tabIndex={-1} className="fd-entry" aria-labelledby="entry-title">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
         <h2 id="entry-title" className="c-h2">Enter the draw</h2>
         <button type="button" className="btn-ghost" onClick={onClose}>Close</button>

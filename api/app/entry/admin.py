@@ -39,6 +39,7 @@ def demo_drop_request() -> CreateDrop:
         opens_at=now + timedelta(seconds=10), closes_at=now + timedelta(minutes=3),
         allocation_mode="lottery_wil", pow_required=True, turnstile_required=True, pow_bits=4,
         offer_ttl_s=60, pay_deadline_s=30, max_promotion_rounds=3,
+        seat_selection=True, seat_wave_size=10, seat_wave_s=20,
         sybil_rules=[{"id": "device", "kind": "max_per_device", "limit": 2},
                      {"id": "payment", "kind": "max_per_payment", "limit": 2},
                      {"id": "fresh", "kind": "min_account_age_s", "value": 86400}],
