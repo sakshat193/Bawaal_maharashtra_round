@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: fairdrop-api
+    runtime: docker
+    plan: free
+    region: singapore
+    branch: main
+    dockerfilePath: ./api/Dockerfile
+    dockerContext: .
+    dockerCommand: 'sh -c "python -m app.migrate && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"'
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: ADMIN_KEY
+        generateValue: true
+      - key: DEMO_MODE
+        value: "true"
+      - key: PLATFORM_KEY_FILE
+        value: /etc/secrets/platform_ed25519.pem
+      - key: RECEIPT_KEY_FILE
+        value: /etc/secrets/receipt_ed25519.pem
+      - key: POW_KEY_FILE
+        value: /etc/secrets/pow_hmac.key
+      # ponytail: proxy traffic shares one IP bucket. Raise the demo limit;
+      # upgrade by configuring the known proxy IPs in TRUSTED_PROXIES.
+      - key: RATE_LIMIT_RPS
+        value: "50"
+      - key: RATE_LIMIT_BURST
+        value: "200"
+      # Optional: leave both empty to use mock payment.
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false

@@ -1,0 +1,15 @@
+name: Keep Render API awake
+"on":
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ping:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Ping database-free liveness endpoint
+        run: curl -fsS --retry 3 --max-time 90 https://fairdrop-api.onrender.com/health
