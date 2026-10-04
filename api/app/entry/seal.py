@@ -105,7 +105,7 @@ def _verify_args(a: tuple) -> bool:
 
 def build_blobs(drop: dict, entries: list[dict], exclusions: list[tuple[str, str]]):
     excluded = {eid for eid, _ in exclusions}
-    excl_blob = canonical.exclusions_bytes(exclusions)
+    excl_blob = canonical.exclusions_bytes([{"entry_id": eid, "reason": reason} for eid, reason in exclusions])
     excl_hash = hashlib.sha256(excl_blob).hexdigest()
     header = {"config_hash": drop["config_hash"], "drand_round": drop["drand_round"],
               "drop_id": str(drop["drop_id"]), "exclusions_hash": excl_hash}
