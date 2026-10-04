@@ -7,7 +7,6 @@ services:
     branch: main
     dockerfilePath: ./api/Dockerfile
     dockerContext: .
-    dockerCommand: 'sh -c "python -m app.migrate && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"'
     healthCheckPath: /health
     envVars:
       - key: DATABASE_URL
