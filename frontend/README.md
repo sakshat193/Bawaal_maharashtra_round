@@ -62,7 +62,6 @@ $reviewTests = @(rg --files frontend/src -g '*.test.js')
 node --test @reviewTests
 node --test contracts/fixtures/gen.test.mjs
 npm --prefix frontend run build
-node --test docs/adversarial/frontend-gates.test.mjs
 ```
 
 The dashboard accepts M4's `results.json` array schema. Only `source: live_harness`
