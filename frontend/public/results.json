@@ -1,0 +1,423 @@
+{
+  "schema_version": 1,
+  "source": "live_harness",
+  "modes": [
+    {
+      "mode": "naive_fcfs",
+      "entries": 102,
+      "identities": 102,
+      "tickets_won": 41,
+      "profiles": {
+        "speed_bots": {
+          "identities": 20,
+          "entries": 20,
+          "tickets_won": 6,
+          "bot": true,
+          "cohort": "speed_bots"
+        },
+        "broker": {
+          "identities": 10,
+          "entries": 10,
+          "tickets_won": 12,
+          "bot": true,
+          "cohort": "broker"
+        },
+        "double_redeem": {
+          "identities": 1,
+          "entries": 1,
+          "tickets_won": 0,
+          "bot": true,
+          "cohort": "double_redeem"
+        },
+        "forged_redeem": {
+          "identities": 1,
+          "entries": 1,
+          "tickets_won": 0,
+          "bot": true,
+          "cohort": "forged_redeem"
+        },
+        "honest_groups": {
+          "identities": 30,
+          "entries": 30,
+          "tickets_won": 14,
+          "bot": false,
+          "cohort": "groups"
+        },
+        "honest_singles": {
+          "identities": 30,
+          "entries": 30,
+          "tickets_won": 8,
+          "bot": false,
+          "cohort": "singles"
+        },
+        "late_payer": {
+          "identities": 1,
+          "entries": 1,
+          "tickets_won": 1,
+          "bot": false,
+          "cohort": "late_payer"
+        },
+        "payment_failer": {
+          "identities": 1,
+          "entries": 1,
+          "tickets_won": 0,
+          "bot": false,
+          "cohort": "payment_failer"
+        },
+        "reconnect": {
+          "identities": 1,
+          "entries": 1,
+          "tickets_won": 0,
+          "bot": false,
+          "cohort": "reconnect"
+        },
+        "replay": {
+          "identities": 1,
+          "entries": 1,
+          "tickets_won": 0,
+          "bot": true,
+          "cohort": "replay"
+        },
+        "sybil_cluster": {
+          "identities": 6,
+          "entries": 6,
+          "tickets_won": 0,
+          "bot": true,
+          "cohort": "sybil_cluster"
+        }
+      },
+      "bot_ticket_share": 0.43902,
+      "bot_identity_share": 0.38235,
+      "bot_share_ratio": 1.148,
+      "groups_vs_singles": {
+        "group_members": 14,
+        "singles": 8,
+        "ratio": 1.75
+      },
+      "exclusions_per_rule": {},
+      "invariants": {
+        "held_within_capacity": true,
+        "held_matches_active_offers": true,
+        "oversell": 0,
+        "double_redemption": 0
+      },
+      "attack_checks": {
+        "replay": {
+          "passed": true,
+          "expected": "403 offer_not_yours",
+          "status": 403,
+          "error": "offer_not_yours"
+        },
+        "forged_redeem": {
+          "passed": true,
+          "expected": "403 or 409; never 200",
+          "status": 409,
+          "error": "not_offered"
+        },
+        "double_redeem": {
+          "passed": true,
+          "expected": "exactly one 200 from 50 order IDs",
+          "status": 1,
+          "error": ""
+        },
+        "payment_failer": {
+          "passed": true,
+          "expected": "stock released after payment failure",
+          "status": "payment_failed",
+          "error": ""
+        },
+        "reconnect": {
+          "passed": true,
+          "expected": "same entry and offer after a fresh login",
+          "status": "same",
+          "error": ""
+        },
+        "late_payer": {
+          "passed": true,
+          "expected": "confirmed after the offer deadline",
+          "status": "confirmed",
+          "error": ""
+        }
+      },
+      "configured_bot_identities": 39
+    },
+    {
+      "mode": "hardened_fcfs",
+      "entries": 102,
+      "identities": 102,
+      "tickets_won": 41,
+      "profiles": {
+        "speed_bots": {
+          "identities": 20,
+          "entries": 20,
+          "tickets_won": 0,
+          "bot": true,
+          "cohort": "speed_bots"
+        },
+        "broker": {
+          "identities": 10,
+          "entries": 10,
+          "tickets_won": 20,
+          "bot": true,
+          "cohort": "broker"
+        },
+        "double_redeem": {
+          "identities": 1,
+          "entries": 1,
+          "tickets_won": 0,
+          "bot": true,
+          "cohort": "double_redeem"
+        },
+        "forged_redeem": {
+          "identities": 1,
+          "entries": 1,
+          "tickets_won": 0,
+          "bot": true,
+          "cohort": "forged_redeem"
+        },
+        "honest_groups": {
+          "identities": 30,
+          "entries": 30,
+          "tickets_won": 20,
+          "bot": false,
+          "cohort": "groups"
+        },
+        "honest_singles": {
+          "identities": 30,
+          "entries": 30,
+          "tickets_won": 0,
+          "bot": false,
+          "cohort": "singles"
+        },
+        "late_payer": {
+          "identities": 1,
+          "entries": 1,
+          "tickets_won": 1,
+          "bot": false,
+          "cohort": "late_payer"
+        },
+        "payment_failer": {
+          "identities": 1,
+          "entries": 1,
+          "tickets_won": 0,
+          "bot": false,
+          "cohort": "payment_failer"
+        },
+        "reconnect": {
+          "identities": 1,
+          "entries": 1,
+          "tickets_won": 0,
+          "bot": false,
+          "cohort": "reconnect"
+        },
+        "replay": {
+          "identities": 1,
+          "entries": 1,
+          "tickets_won": 0,
+          "bot": true,
+          "cohort": "replay"
+        },
+        "sybil_cluster": {
+          "identities": 6,
+          "entries": 6,
+          "tickets_won": 0,
+          "bot": true,
+          "cohort": "sybil_cluster"
+        }
+      },
+      "bot_ticket_share": 0.4878,
+      "bot_identity_share": 0.38235,
+      "bot_share_ratio": 1.276,
+      "groups_vs_singles": {
+        "group_members": 20,
+        "singles": 0,
+        "ratio": null
+      },
+      "exclusions_per_rule": {},
+      "invariants": {
+        "held_within_capacity": true,
+        "held_matches_active_offers": true,
+        "oversell": 0,
+        "double_redemption": 0
+      },
+      "attack_checks": {
+        "replay": {
+          "passed": true,
+          "expected": "403 offer_not_yours",
+          "status": 403,
+          "error": "offer_not_yours"
+        },
+        "forged_redeem": {
+          "passed": true,
+          "expected": "403 or 409; never 200",
+          "status": 409,
+          "error": "not_offered"
+        },
+        "double_redeem": {
+          "passed": true,
+          "expected": "exactly one 200 from 50 order IDs",
+          "status": 1,
+          "error": ""
+        },
+        "payment_failer": {
+          "passed": true,
+          "expected": "stock released after payment failure",
+          "status": "payment_failed",
+          "error": ""
+        },
+        "reconnect": {
+          "passed": true,
+          "expected": "same entry and offer after a fresh login",
+          "status": "same",
+          "error": ""
+        },
+        "late_payer": {
+          "passed": true,
+          "expected": "confirmed after the offer deadline",
+          "status": "confirmed",
+          "error": ""
+        }
+      },
+      "configured_bot_identities": 39
+    },
+    {
+      "mode": "lottery_wil",
+      "entries": 102,
+      "identities": 102,
+      "tickets_won": 41,
+      "profiles": {
+        "speed_bots": {
+          "identities": 20,
+          "entries": 20,
+          "tickets_won": 10,
+          "bot": true,
+          "cohort": "speed_bots"
+        },
+        "broker": {
+          "identities": 10,
+          "entries": 10,
+          "tickets_won": 8,
+          "bot": true,
+          "cohort": "broker"
+        },
+        "double_redeem": {
+          "identities": 1,
+          "entries": 1,
+          "tickets_won": 0,
+          "bot": true,
+          "cohort": "double_redeem"
+        },
+        "forged_redeem": {
+          "identities": 1,
+          "entries": 1,
+          "tickets_won": 0,
+          "bot": true,
+          "cohort": "forged_redeem"
+        },
+        "honest_groups": {
+          "identities": 30,
+          "entries": 30,
+          "tickets_won": 13,
+          "bot": false,
+          "cohort": "groups"
+        },
+        "honest_singles": {
+          "identities": 30,
+          "entries": 30,
+          "tickets_won": 9,
+          "bot": false,
+          "cohort": "singles"
+        },
+        "late_payer": {
+          "identities": 1,
+          "entries": 1,
+          "tickets_won": 1,
+          "bot": false,
+          "cohort": "late_payer"
+        },
+        "payment_failer": {
+          "identities": 1,
+          "entries": 1,
+          "tickets_won": 0,
+          "bot": false,
+          "cohort": "payment_failer"
+        },
+        "reconnect": {
+          "identities": 1,
+          "entries": 1,
+          "tickets_won": 0,
+          "bot": false,
+          "cohort": "reconnect"
+        },
+        "replay": {
+          "identities": 1,
+          "entries": 1,
+          "tickets_won": 0,
+          "bot": true,
+          "cohort": "replay"
+        },
+        "sybil_cluster": {
+          "identities": 6,
+          "entries": 6,
+          "tickets_won": 0,
+          "bot": true,
+          "cohort": "sybil_cluster"
+        }
+      },
+      "bot_ticket_share": 0.43902,
+      "bot_identity_share": 0.38235,
+      "bot_share_ratio": 1.148,
+      "groups_vs_singles": {
+        "group_members": 13,
+        "singles": 9,
+        "ratio": 1.4444
+      },
+      "exclusions_per_rule": {},
+      "invariants": {
+        "held_within_capacity": true,
+        "held_matches_active_offers": true,
+        "oversell": 0,
+        "double_redemption": 0
+      },
+      "attack_checks": {
+        "replay": {
+          "passed": true,
+          "expected": "403 offer_not_yours",
+          "status": 403,
+          "error": "offer_not_yours"
+        },
+        "forged_redeem": {
+          "passed": true,
+          "expected": "403 or 409; never 200",
+          "status": 409,
+          "error": "not_offered"
+        },
+        "double_redeem": {
+          "passed": true,
+          "expected": "exactly one 200 from 50 order IDs",
+          "status": 1,
+          "error": ""
+        },
+        "payment_failer": {
+          "passed": true,
+          "expected": "stock released after payment failure",
+          "status": "payment_failed",
+          "error": ""
+        },
+        "reconnect": {
+          "passed": true,
+          "expected": "same entry and offer after a fresh login",
+          "status": "same",
+          "error": ""
+        },
+        "late_payer": {
+          "passed": true,
+          "expected": "confirmed after the offer deadline",
+          "status": "confirmed",
+          "error": ""
+        }
+      },
+      "configured_bot_identities": 39
+    }
+  ]
+}
