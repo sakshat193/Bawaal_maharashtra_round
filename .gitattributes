@@ -1,0 +1,2 @@
+# Canonical evidence is hashed byte for byte; checkout must not rewrite newlines.
+contracts/fixtures/*.ndjson -text
