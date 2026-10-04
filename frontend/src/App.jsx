@@ -4,6 +4,7 @@ import ConcertApp from './pages/concert/ConcertApp.jsx';
 import Verify from './pages/Verify.jsx';
 import JudgeDashboard from './pages/JudgeDashboard.jsx';
 import DemoPanel from './pages/DemoPanel.jsx';
+import AdminPanel from './pages/AdminPanel.jsx';
 import DropPage from './drop/DropPage.jsx';
 
 export default function App() {
@@ -17,6 +18,7 @@ export default function App() {
       <Route path="/drops/:dropId" element={<DropPage />} />
       <Route path="/judges" element={<JudgeDashboard />} />
       <Route path="/demo" element={<DemoPanel />} />
+      <Route path="/admin" element={<AdminPanel />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

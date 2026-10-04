@@ -30,6 +30,11 @@ test('entry request omits an absent Turnstile token and includes a present token
   assert.equal(withToken.turnstile_token, 'turnstile-proof');
 });
 
+test('entry request omits pow when no proof of work was issued', () => {
+  const body = createEntryBody({ tierId: 'gold', quantity: 1, nonces: [] });
+  assert.equal('pow' in body, false);
+});
+
 test('countdown uses server time and clamps elapsed deadlines', () => {
   assert.equal(formatCountdown('2026-10-04T13:10:00Z', Date.parse('2026-10-04T13:00:01Z')), '09:59');
   assert.equal(formatCountdown('2026-10-04T12:59:59Z', Date.parse('2026-10-04T13:00:00Z')), '00:00');

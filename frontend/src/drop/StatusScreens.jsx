@@ -124,7 +124,7 @@ export function Results({ drop, me, draw, refresh }) {
   const payCountdown = useCountdown(offer?.pay_deadline);
   const tier = drop.tiers.find(item => item.tier_id === entry.tier_id);
   let orderId = null;
-  try { orderId = offer ? globalThis.sessionStorage?.getItem(`fd.order.${offer.offer_id}`) : null; } catch { /* Use the supported device-recovery screen. */ }
+  try { orderId = offer ? offer.order_id || globalThis.sessionStorage?.getItem(`fd.order.${offer.offer_id}`) : null; } catch { /* Use the supported device-recovery screen. */ }
   const winners = draw?.allocation?.length || 0;
 
   async function mutate(action) {
@@ -146,7 +146,7 @@ export function Results({ drop, me, draw, refresh }) {
   });
   const decline = () => mutate(() => api(`/api/offers/${encodeURIComponent(offer.offer_id)}/decline`, { method: 'POST' }));
   const pay = result => mutate(async () => {
-    const id = globalThis.sessionStorage?.getItem(`fd.order.${offer.offer_id}`);
+    const id = orderId || globalThis.sessionStorage?.getItem(`fd.order.${offer.offer_id}`);
     if (!id) throw new Error('order_not_available');
     await api(`/api/offers/${encodeURIComponent(offer.offer_id)}/pay`, { method: 'POST', body: { order_id: id, result } });
   });
@@ -170,7 +170,7 @@ export function Results({ drop, me, draw, refresh }) {
       const payment = new window.Razorpay({
         key:checkout.key_id, order_id:checkout.provider_order_id, amount:checkout.amount_paise, currency:checkout.currency,
         handler: result => mutate(async () => {
-          const id = globalThis.sessionStorage?.getItem(`fd.order.${offer.offer_id}`);
+          const id = orderId || globalThis.sessionStorage?.getItem(`fd.order.${offer.offer_id}`);
           await api(`/api/offers/${encodeURIComponent(offer.offer_id)}/pay`, {method:'POST',body:razorpayPaymentBody(id,result)});
         }),
         modal:{ondismiss:()=>setBusy(false)}

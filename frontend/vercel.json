@@ -2,5 +2,8 @@
   "rewrites": [
     { "source": "/api/:path*", "destination": "https://fairdrop-api.onrender.com/api/:path*" },
     { "source": "/platform/:path*", "destination": "https://fairdrop-api.onrender.com/platform/:path*" }
+  ],
+  "headers": [
+    { "source": "/api/:path*", "headers": [{ "key": "x-vercel-enable-rewrite-caching", "value": "1" }] }
   ]
 }

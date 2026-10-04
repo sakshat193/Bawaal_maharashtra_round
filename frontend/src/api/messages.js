@@ -12,6 +12,7 @@ export const ERROR_MESSAGES = Object.freeze({
   already_redeemed_other_order: 'This offer was already redeemed with another order.',
   not_offered: 'This entry does not have an active offer.',
   payment_window_closed: "Your payment arrived after the window closed. You won't be charged; any charge is refunded.",
+  draw_not_due: 'The randomness for this draw is not published yet.',
   not_payment_pending: 'This offer is not waiting for payment.'
 });
 

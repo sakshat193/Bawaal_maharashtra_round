@@ -6,6 +6,7 @@ import { messageForError, RULE_TEXT } from '../api/messages.js';
 import { MOCK_SCENARIOS } from '../api/scenarios.js';
 import { isLite } from '../lib/constants.js';
 
+const PHASE_AFTER = { open: 'open', seal: 'sealed', draw: 'drawn' };
 const ERROR_FIXTURES = Object.keys(import.meta.glob('../../../contracts/fixtures/*.4??.*.json'))
   .map(path => path.slice(path.lastIndexOf('/') + 1))
   .filter(name => Number(name.match(/\.(\d{3})\./)?.[1]) >= 400)
@@ -50,7 +51,7 @@ export default function DemoPanel() {
       const result = await api(endpoint, { method: 'POST', admin: true });
       const message = action === 'reset'
         ? 'The demo drop was reset.'
-        : `${result.name || 'Drop'} is now ${result.phase || action}.`;
+        : `${result.name || drop.data?.name || 'The drop'} is now ${result.phase || PHASE_AFTER[action]}.`;
       setNotice(message);
       if (action === 'reset') setScenario('none');
       drop.refresh();

@@ -58,3 +58,14 @@ test('pending payment without local order keeps the supported device-recovery se
     assert.match(text(root),/Finish paying on the device where you pressed Buy/);
   }finally{act(()=>root?.unmount());}
 });
+
+test('pending payment with server order id resumes on another device',async t=>{
+  install(t,async()=>json({}));
+  let root;
+  try{
+    const me=fixture('getMe.200.payment_pending');
+    await act(async()=>{root=create(React.createElement(Results,{drop:fixture('getDrop.200.drawn'),me:{...me,offer:{...me.offer,order_id:'ord-from-server'}},refresh:()=>{}}));});
+    assert.doesNotMatch(text(root),/Finish paying on the device where you pressed Buy/);
+    assert.match(text(root),/ord-from-server/);
+  }finally{act(()=>root?.unmount());}
+});

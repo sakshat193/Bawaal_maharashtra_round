@@ -836,6 +836,79 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/drops/{drop_id}/traffic": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Entries grouped by /24 (/48) subnet with device/payment spread. Admin hint only; never published or weighted. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    drop_id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                401: components["responses"]["Error"];
+                404: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Seed the demo catalog (same as scripts/seed_catalog.py). Idempotent; returns created/skipped/opened. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                401: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/reset": {
         parameters: {
             query?: never;
@@ -1078,6 +1151,7 @@ export interface components {
                 expires_at?: string;
                 /** Format: date-time */
                 pay_deadline?: string | null;
+                order_id?: string | null;
             } | null;
         };
         Draw: {

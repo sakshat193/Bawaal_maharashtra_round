@@ -86,7 +86,7 @@ export async function api(path, { method = 'GET', body, admin = false, signal, i
 
   updateClock(data);
   if (!response.ok) {
-    if (response.status === 401) clearIdentity();
+    if (response.status === 401 && !adminRoute) clearIdentity(); // a bad admin key must not log the fan out
     throw new ApiError(response.status, data?.error || 'request_failed', data);
   }
   return includeHeaders ? { data, headers: response.headers } : data;

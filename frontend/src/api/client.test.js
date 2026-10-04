@@ -116,3 +116,14 @@ test('api can return NDJSON and its evidence headers together', async t => {
   assert.equal(response.data, ndjson);
   assert.equal(response.headers.get('X-Fairdrop-Timestamped-At'), '2026-10-04T13:12:00Z');
 });
+
+test('a rejected admin key does not clear the fan identity', async t => {
+  const { storageEntries } = installGlobals(t, {
+    storage: { 'fd.jwt': 'identity-token', 'fd.admin': 'wrong' },
+    fetchImpl: async () => jsonResponse({ error: 'unauthorized' }, 401)
+  });
+  await assert.rejects(() => api('/api/admin/catalog', { method: 'POST' }), ApiError);
+  assert.equal(storageEntries.get('fd.jwt'), 'identity-token');
+  await assert.rejects(() => api('/api/drops/x/me'), ApiError);
+  assert.equal(storageEntries.has('fd.jwt'), false);
+});

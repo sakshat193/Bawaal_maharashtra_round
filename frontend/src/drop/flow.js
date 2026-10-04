@@ -5,7 +5,7 @@ export function createEntryBody({ tierId, quantity, turnstileToken, issuedAt, no
     tier_id: tierId,
     quantity,
     ...(turnstileToken ? { turnstile_token: turnstileToken } : {}),
-    pow: { issued_at: issuedAt, nonces: [...nonces] }
+    ...(issuedAt ? { pow: { issued_at: issuedAt, nonces: [...nonces] } } : {})
   };
 }
 

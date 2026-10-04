@@ -8,14 +8,17 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     base: './',
+    // Only imported inside the PoW Worker, which Vite's dep scan doesn't follow; avoids a mid-session reload.
+    optimizeDeps: { include: ['hash-wasm'] },
     server: {
       host: true,
       port: 5173,
       allowedHosts: ['.trycloudflare.com'],
       fs: { allow: ['..'] },
       proxy: {
-        '/api': target,
-        '/platform': target
+        // changeOrigin so VITE_PROXY_TARGET can be a remote https host (Render)
+        '/api': { target, changeOrigin: true },
+        '/platform': { target, changeOrigin: true }
       }
     }
   };
