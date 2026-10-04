@@ -56,8 +56,8 @@ def _get_json(client: httpx.Client, url: str) -> dict:
 def _wire_blob(response: httpx.Response, names: tuple[str, ...], rows_key: str | None = None):
     response.raise_for_status()
     metadata = {key.lower(): value for key, value in response.headers.items()}
-    content_type = response.headers.get("content-type", "").lower()
-    if "json" not in content_type:
+    content_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    if content_type != "application/json":
         return response.content, metadata
     try:
         payload = response.json()
@@ -144,6 +144,8 @@ def _allocation_rows(draw: dict, eligible: list[dict]) -> list[dict]:
     by_id = {entry["entry_id"]: entry for entry in eligible}
     result = []
     for item in raw:
+        if isinstance(item, dict) and (item.get("round") or 0) != 0:
+            continue
         entry_id = item if isinstance(item, str) else item.get("entry_id") if isinstance(item, dict) else None
         if entry_id not in by_id:
             raise VerificationError(f"draw allocation contains unknown entry {entry_id!r}")
@@ -203,8 +205,8 @@ def verify_drop(base_url: str, drop_id: str, receipt_path: Path | None = None) -
             raise VerificationError("snapshot belongs to a different drop")
         snapshot_hash = _hex_hash(snapshot_blob)
         exclusions_hash = _hex_hash(exclusion_blob)
-        expected_snapshot_hash = _meta(snapshot_meta, "canonical_hash", "snapshot_hash", "x-snapshot-hash", "x-canonical-hash") or _meta(draw, "snapshot_hash", "canonical_hash")
-        expected_exclusions_hash = _meta(exclusion_meta, "exclusions_hash", "x-exclusions-hash") or _meta(draw, "exclusions_hash") or header["exclusions_hash"]
+        expected_snapshot_hash = _meta(snapshot_meta, "canonical_hash", "snapshot_hash", "x-fairdrop-snapshot-sha256", "x-snapshot-hash", "x-canonical-hash") or _meta(draw, "snapshot_hash", "canonical_hash")
+        expected_exclusions_hash = _meta(exclusion_meta, "exclusions_hash", "x-fairdrop-exclusions-sha256", "x-exclusions-hash") or _meta(draw, "exclusions_hash") or header["exclusions_hash"]
         if not expected_snapshot_hash:
             raise VerificationError("API did not publish the snapshot hash")
         if snapshot_hash != str(expected_snapshot_hash).lower():
@@ -219,21 +221,25 @@ def verify_drop(base_url: str, drop_id: str, receipt_path: Path | None = None) -
         checks.append(("exclusions SHA-256 and snapshot link", "PASS"))
 
         timestamp_proof = _meta(snapshot_meta, "timestamp_proof", "x-timestamp-proof")
-        timestamped_at = _meta(snapshot_meta, "timestamped_at", "x-timestamped-at")
+        encoded_proof = _meta(snapshot_meta, "x-fairdrop-timestamp-proof")
+        if encoded_proof is not None:
+            try:
+                timestamp_proof = json.loads(base64.b64decode(encoded_proof, validate=True))
+            except (ValueError, UnicodeDecodeError) as exc:
+                raise VerificationError("snapshot timestamp proof is malformed") from exc
+        timestamped_at = _meta(snapshot_meta, "timestamped_at", "x-fairdrop-timestamped-at", "x-timestamped-at")
         if isinstance(timestamp_proof, str):
             try:
-                decoded_proof = json.loads(timestamp_proof)
-            except json.JSONDecodeError:
-                decoded_proof = None
-            if isinstance(decoded_proof, dict):
-                timestamp_proof = decoded_proof
+                timestamp_proof = json.loads(timestamp_proof)
+            except json.JSONDecodeError as exc:
+                raise VerificationError("snapshot timestamp proof is malformed") from exc
         if isinstance(timestamp_proof, dict):
             timestamped_at = timestamped_at or timestamp_proof.get("timestamped_at")
-            proof_present = any(timestamp_proof.get(key) for key in (
-                "ots_receipt", "ots_proof", "opentimestamps", "public_commit_url", "commit_url", "proof"
-            ))
+            proof_present = (timestamp_proof.get("ots", {}).get("calendars")
+                             or timestamp_proof.get("git", {}).get("commit"))
+            proof_present = proof_present and timestamp_proof.get("snapshot_sha256") == snapshot_hash
         else:
-            proof_present = isinstance(timestamp_proof, str) and bool(timestamp_proof.strip())
+            proof_present = False
         if not proof_present or not timestamped_at:
             raise VerificationError("snapshot is missing its timestamp proof or timestamped_at")
         round_number = int(header["drand_round"])
