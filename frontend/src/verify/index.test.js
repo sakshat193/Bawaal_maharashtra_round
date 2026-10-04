@@ -29,6 +29,10 @@ async function verify(t, { mediaType = 'application/x-ndjson', proofChange = {},
     return Response.json(value);
   };
   await act(async () => { root = create(React.createElement(Verifier, { dropId })); });
+  const deadline = Date.now() + 2000;
+  while (text(root.toJSON()).includes('Checking published evidence') && Date.now() < deadline) {
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 5)); });
+  }
   return text(root.toJSON());
 }
 
