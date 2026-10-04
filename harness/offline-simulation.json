@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "scenario": "500 honest singles, 500 friends entering individually, 99 brokers with quantity 4",
+  "seed": 20261004,
+  "capacity": 500,
+  "modes": {
+    "individual_lottery": {
+      "entries": 1099,
+      "identities": 1099,
+      "tickets_won": 500,
+      "broker_ticket_share": 0.28214,
+      "broker_identity_share": 0.09008,
+      "broker_share_ratio": 3.132,
+      "single_win_rate": 0.35835,
+      "group_member_win_rate": 0.3595,
+      "groups_vs_singles": 1.003,
+      "trials": 250
+    },
+    "weighted_individual_lottery": {
+      "entries": 1099,
+      "identities": 1099,
+      "tickets_won": 500,
+      "broker_ticket_share": 0.10822,
+      "broker_identity_share": 0.09008,
+      "broker_share_ratio": 1.201,
+      "single_win_rate": 0.44466,
+      "group_member_win_rate": 0.44711,
+      "groups_vs_singles": 1.006,
+      "trials": 250
+    },
+    "fcfs": {
+      "entries": 1099,
+      "identities": 1099,
+      "tickets_won": 500,
+      "broker_ticket_share": 0.792,
+      "broker_identity_share": 0.09008,
+      "broker_share_ratio": 8.792,
+      "single_win_rate": 0.096,
+      "group_member_win_rate": 0.112,
+      "groups_vs_singles": 1.167,
+      "trials": 250
+    }
+  }
+}
