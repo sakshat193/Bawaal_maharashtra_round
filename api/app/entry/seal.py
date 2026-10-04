@@ -14,7 +14,6 @@ every step is deterministic, produces identical bytes.
 import hashlib
 import json
 import logging
-import math
 from concurrent.futures import Executor, ProcessPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
@@ -93,8 +92,7 @@ def compute_exclusions(drop: dict, entries: list[dict], executor: Executor | Non
     opens = drop["opens_at"]
     facts = [{"entry_id": e["entry_id"], "device_hash": e["device_hash"],
               "payment_fingerprint": e["payment_fingerprint"],
-              "account_age_s": (math.floor((opens - e["account_created_at"]).total_seconds())
-                                if e["account_created_at"] is not None else None)}
+              "opens_at": opens, "account_created_at": e["account_created_at"]}
              for e in sorted(entries, key=lambda e: e["entry_id"]) if e["entry_id"] not in reasons]
     for entry_id, reason in sybil.apply(list(drop["sybil_rules"]), facts):
         reasons[entry_id] = reason
