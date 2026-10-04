@@ -13,7 +13,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Run the eleven-profile attack harness against three Fair Drop modes.")
     parser.add_argument("base_url", help="API origin, for example http://localhost:8000")
     parser.add_argument("--profiles", type=Path, default=Path("harness/profiles.yaml"))
-    parser.add_argument("--out", type=Path, default=Path("web/public/results.json"))
+    parser.add_argument("--out", type=Path, default=Path("frontend/public/results.json"))
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--concurrency", type=int, default=32)
     parser.add_argument("--pow-bits", type=int, default=8)

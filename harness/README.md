@@ -7,7 +7,7 @@ Install the shared package with `pip install -e common` after Member 2 adds the 
 Set `ADMIN_KEY`, then run:
 
 ```bash
-python -m harness http://localhost:8000 --profiles harness/profiles.yaml --out web/public/results.json
+python -m harness http://localhost:8000 --profiles harness/profiles.yaml --out frontend/public/results.json
 ```
 
 The harness creates naive FCFS, hardened FCFS, and WIL drops. It logs in each synthetic profile and submits the same users to all three drops. It seals each drop and waits for its Quicknet round. It then runs replay, forged redeem, double redeem, late payment, payment failure, and reconnect checks.

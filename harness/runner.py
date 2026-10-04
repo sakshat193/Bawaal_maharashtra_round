@@ -171,7 +171,8 @@ def _summarize(mode: str, users: list[dict], outcomes: list[dict], invariants: d
     by_identity = {user["identity_id"]: user for user in users if user.get("identity_id")}
     by_entry = {user["entry_id"]: user for user in users if user.get("entry_id")}
     counts = {
-        name: {"identities": len({user.get("identity_id") or user["username"] for user in group}), "entries": 0, "tickets_won": 0}
+        name: {"identities": len({user.get("identity_id") or user["username"] for user in group}),
+               "entries": 0, "tickets_won": 0, "bot": group[0]["bot"], "cohort": group[0]["cohort"]}
         for name, group in profile_users.items()
     }
     exclusions = {}
