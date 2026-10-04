@@ -58,6 +58,14 @@ class DrandTimingTests(unittest.TestCase):
 
 
 class DrandFetchTests(unittest.TestCase):
+    def test_relays_receive_an_identifiable_user_agent(self):
+        with patch.object(drand, "urlopen", return_value=FakeResponse(beacon(7))) as urlopen:
+            asyncio.run(drand.fetch(7))
+        for call in urlopen.call_args_list:
+            request = call.args[0]
+            self.assertEqual(request.get_header("User-agent"), "FairDrop/0.2.0")
+            self.assertTrue(request.full_url.endswith("/7"))
+
     def test_fetch_requires_two_matching_valid_relays(self):
         payload = beacon(7)
         with patch.object(drand, "urlopen", return_value=FakeResponse(payload)) as urlopen:

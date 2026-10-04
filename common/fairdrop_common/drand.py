@@ -4,7 +4,7 @@ import json
 import math
 from datetime import datetime
 from urllib.error import HTTPError, URLError
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 DRAND_CHAIN_HASH = "52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971"
 CHAIN = DRAND_CHAIN_HASH
@@ -36,7 +36,8 @@ async def fetch(round_number: int) -> dict[str, object]:
         raise ValueError("round_number must be positive")
 
     def request(relay: str) -> dict[str, object]:
-        with urlopen(f"{relay}/{round_number}", timeout=10) as response:
+        request = Request(f"{relay}/{round_number}", headers={"User-Agent": "FairDrop/0.2.0"})
+        with urlopen(request, timeout=10) as response:
             payload = json.load(response)
         if not isinstance(payload, dict) or payload.get("round") != round_number:
             raise ValueError("drand returned an unexpected round")
