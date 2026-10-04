@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any
 
@@ -10,6 +11,7 @@ from fastapi import APIRouter, Depends
 from psycopg.rows import tuple_row
 
 from ..db import get_pool
+from ..config import get_settings
 from ..entry import Identity, current_identity
 from ..entry.admin_auth import require_admin
 from ..errors import ApiError
@@ -19,8 +21,23 @@ from fairdrop_common.rank import fcfs_order, lottery_order
 from .payments import PaymentProviderError, create_order, verify_payment
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api")
-_background_task: asyncio.Task | None = None
+
+
+@asynccontextmanager
+async def lifespan(app):
+    task = asyncio.create_task(background()) if get_settings().scheduler_enabled else None
+    try:
+        yield
+    finally:
+        if task is not None:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+
+router = APIRouter(prefix="/api", lifespan=lifespan)
 
 
 class _Cursor:
@@ -546,20 +563,3 @@ async def background() -> None:
         await asyncio.sleep(2)
 
 
-@router.on_event("startup")
-async def _start_background() -> None:
-    global _background_task
-    if _background_task is None or _background_task.done():
-        _background_task = asyncio.create_task(background())
-
-
-@router.on_event("shutdown")
-async def _stop_background() -> None:
-    global _background_task
-    if _background_task is not None:
-        _background_task.cancel()
-        try:
-            await _background_task
-        except asyncio.CancelledError:
-            pass
-        _background_task = None
