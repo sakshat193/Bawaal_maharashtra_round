@@ -14,7 +14,9 @@ def test_render_uses_persistent_secret_files_and_liveness():
     assert service["healthCheckPath"] == "/health"
     assert service["dockerfilePath"] == "./api/Dockerfile"
     assert service["dockerContext"] == "."
-    cmd = next(l for l in (ROOT / "api/Dockerfile").read_text().splitlines() if l.startswith("CMD "))
+    # Render runs the image's own CMD (a quoted dockerCommand was exec'd as one program name).
+    assert "dockerCommand" not in service
+    cmd = next(line for line in (ROOT / "api/Dockerfile").read_text().splitlines() if line.startswith("CMD "))
     assert "python -m app.migrate && exec uvicorn" in cmd
     assert "${PORT:-8000}" in cmd
     assert "--workers" not in cmd

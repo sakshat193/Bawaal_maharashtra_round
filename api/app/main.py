@@ -56,6 +56,8 @@ def create_app() -> FastAPI:
     alloc = _optional(".alloc")
     if alloc is not None:
         app.include_router(alloc.router)                   # Member 3: allocation
+    from .seats import router as seats_router
+    app.include_router(seats_router)                       # seat selection after the lottery
     return app
 
 

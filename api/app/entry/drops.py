@@ -53,6 +53,11 @@ class CreateDrop(BaseModel):
     offer_ttl_s: int = Field(default=600, ge=1)
     pay_deadline_s: int = Field(default=300, ge=1)
     max_promotion_rounds: int = Field(default=6, ge=0, le=100)
+    # Winners pick exact seats after the draw, in rank-ordered waves of seat_wave_size
+    # offers per tier, each wave opening seat_wave_s seconds after the previous one.
+    seat_selection: bool = False
+    seat_wave_size: int = Field(default=25, ge=1, le=10000)
+    seat_wave_s: int = Field(default=30, ge=0, le=3600)
     sybil_rules: list[dict] = Field(default_factory=list)
     tiers: list[TierIn] = Field(min_length=1)
 
@@ -107,12 +112,14 @@ def create_drop(conn, req: CreateDrop) -> uuid.UUID:
         conn.execute(
             """INSERT INTO drops (drop_id, name, venue, starts_at, opens_at, closes_at, allocation_mode,
                  pow_required, turnstile_required, pow_bits, pow_k, pow_memory_kib, max_quantity,
-                 offer_ttl_s, pay_deadline_s, max_promotion_rounds, sybil_rules, drand_chain,
+                 offer_ttl_s, pay_deadline_s, max_promotion_rounds, seat_selection, seat_wave_size,
+                 seat_wave_s, sybil_rules, drand_chain,
                  drand_round, config_hash)
                VALUES (%(drop_id)s, %(name)s, %(venue)s, %(starts_at)s, %(opens_at)s, %(closes_at)s,
                  %(allocation_mode)s, %(pow_required)s, %(turnstile_required)s, %(pow_bits)s, %(pow_k)s,
                  %(pow_memory_kib)s, %(max_quantity)s, %(offer_ttl_s)s, %(pay_deadline_s)s,
-                 %(max_promotion_rounds)s, %(sybil_rules_json)s, %(drand_chain)s, %(drand_round)s,
+                 %(max_promotion_rounds)s, %(seat_selection)s, %(seat_wave_size)s, %(seat_wave_s)s,
+                 %(sybil_rules_json)s, %(drand_chain)s, %(drand_round)s,
                  %(config_hash)s)""",
             {**drop, "sybil_rules_json": Jsonb(drop["sybil_rules"])},
         )
@@ -148,6 +155,7 @@ def drop_detail(conn, drop_id) -> dict:
                    "capacity": t["capacity"]} for t in tiers],
         **{k: d[k] for k in ("pow_required", "turnstile_required", "pow_bits", "pow_k", "pow_memory_kib",
                              "max_quantity", "offer_ttl_s", "pay_deadline_s", "max_promotion_rounds",
+                             "seat_selection", "seat_wave_size", "seat_wave_s",
                              "sybil_rules", "config_hash", "drand_chain", "drand_round")},
         "config_hash": d["config_hash"].strip(),
         "drand_round_due_at": iso_s(from_unix(round_due_unix(d))),

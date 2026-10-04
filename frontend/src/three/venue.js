@@ -60,6 +60,8 @@ function placeFloor(section) {
       const dot = {
         tier_id: section.tier_id,
         index: nextIndex++,
+        row: rowIndex + 1,
+        seat: column + 1,
         x: (column - (rowSize - 1) / 2) * SEAT_GAP,
         y: 0.08,
         z: 0.35 + rowIndex * SEAT_GAP,
@@ -95,6 +97,8 @@ function placeRing(section, innerRadius, depth) {
       const dot = {
         tier_id: section.tier_id,
         index: section.dots.length,
+        row: rowIndex + 1,
+        seat: column + 1,
         x: Math.sin(angle) * radius * 1.3,
         y: yAt(radius),
         z: -Math.cos(angle) * radius,
@@ -109,11 +113,13 @@ function placeRing(section, innerRadius, depth) {
   shuffleRanks(section.dots, section.tier_id);
 }
 
-/** Pure ticket-dot placement. A scaled dot represents unitSize tickets. */
-export function layout(tiers = []) {
+/** Pure ticket-dot placement. A scaled dot represents unitSize tickets.
+ *  Pass { unitSize: 1 } for the seat map: then dot.index is the seat's 0-based seat_index
+ *  (row-major), the number the seat API uses, and dot.row / dot.seat are its 1-based label. */
+export function layout(tiers = [], { unitSize: forcedUnit } = {}) {
   const ordered = [...tiers].sort(compareTier);
   const totalCapacity = ordered.reduce((sum, tier) => sum + safeCapacity(tier.capacity), 0);
-  const unitSize = Math.max(1, Math.ceil(totalCapacity / MAX_DOTS));
+  const unitSize = forcedUnit || Math.max(1, Math.ceil(totalCapacity / MAX_DOTS));
   const sections = ordered.map((tier, index) => {
     const capacity = safeCapacity(tier.capacity);
     return {
@@ -146,6 +152,14 @@ export function layout(tiers = []) {
   }
 
   return { unitSize, totalCapacity, tiers: sections };
+}
+
+/** "Row 3 · Seat 12" for a 0-based seat_index in a tier, from the same layout the map draws. */
+export function seatLabels(tiers, tierId) {
+  const section = layout(tiers, { unitSize: 1 }).tiers.find(item => item.tier_id === String(tierId));
+  const labels = [];
+  for (const dot of section?.dots || []) labels[dot.index] = { row: dot.row, seat: dot.seat };
+  return labels;
 }
 
 function tierKey(tiers) {

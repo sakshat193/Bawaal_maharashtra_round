@@ -4,6 +4,7 @@ import { api, serverNow } from '../api/client.js';
 import { messageForError, RULE_TEXT } from '../api/messages.js';
 import { formatCountdown, formatPaise, getOrCreateOrderId, readAcceptedEntry, razorpayPaymentBody } from './flow.js';
 import DrumHero from '../three/DrumHero.jsx';
+import SeatPicker, { SeatSummary } from '../seats/SeatPicker.jsx';
 
 let razorpayScript;
 let checkoutUnavailable = false;
@@ -118,6 +119,7 @@ export function Results({ drop, me, draw, refresh }) {
   const [hideRazorpay, setHideRazorpay] = useState(isCheckoutUnavailable);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [chosenSeats, setChosenSeats] = useState([]);
   const entry = me.entry;
   const offer = me.offer;
   const offerCountdown = useCountdown(offer?.expires_at);
@@ -190,10 +192,12 @@ export function Results({ drop, me, draw, refresh }) {
           <div><span>{tier?.name || offer?.tier_id} · {offer?.quantity} ticket(s)</span><b>{formatPaise(offer?.amount_paise)}</b></div>
           <div><span>Offer expires in</span><b className="mono">{offerCountdown}</b></div>
         </div>
+        {drop.seat_selection && <SeatPicker drop={drop} offer={offer} onSeatsChange={setChosenSeats} />}
         <div className="fd-actions">
-          <button className="btn btn-amber" disabled={busy} onClick={buy}>{busy ? 'Opening checkout…' : 'Buy tickets'}</button>
+          <button className="btn btn-amber" disabled={busy || (drop.seat_selection && chosenSeats.length !== offer?.quantity)} onClick={buy}>{busy ? 'Opening checkout…' : 'Buy tickets'}</button>
           <button className="btn btn-ghost" disabled={busy} onClick={decline}>Decline offer</button>
         </div>
+        {drop.seat_selection && chosenSeats.length !== offer?.quantity && <p className="c-sub">Choose {offer?.quantity} seat{offer?.quantity === 1 ? '' : 's'} on the map to enable Buy.</p>}
         <p className="c-sub">Payment must finish within {drop.pay_deadline_s} seconds after you press Buy.</p>
         {error && <p role="alert" className="fd-error">{error}</p>}
         <DrawSummary entries={drop.counts.entries} winners={winners} phase="draw" />
@@ -208,6 +212,7 @@ export function Results({ drop, me, draw, refresh }) {
     return (
       <ScreenFrame eyebrow="Payment pending" title="Complete your payment.">
         <div className="fd-state-grid"><div><span>Payment deadline</span><b className="mono">{payCountdown}</b></div><div><span>Order</span><b className="mono">{orderId}</b></div></div>
+        <SeatSummary drop={drop} offer={offer} />
         <div className="fd-actions">
           <button className="btn btn-amber" disabled={busy} onClick={() => pay('success')}>Succeed payment</button>
           <button className="btn btn-ghost" disabled={busy} onClick={() => pay('fail')}>Fail payment</button>
@@ -227,6 +232,7 @@ export function Results({ drop, me, draw, refresh }) {
           <span>{tier?.name || entry.tier_id}</span>
           <b>{entry.quantity} ticket{entry.quantity === 1 ? '' : 's'}</b>
           <small>Order {order}</small>
+          <SeatSummary drop={drop} offer={offer} />
         </article>
         <DrawSummary entries={drop.counts.entries} winners={winners} phase="won" />
       </ScreenFrame>

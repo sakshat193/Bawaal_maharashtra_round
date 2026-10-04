@@ -471,7 +471,7 @@ export interface paths {
                 };
                 /** @description offer_not_yours */
                 403: components["responses"]["Error"];
-                /** @description offer_expired | already_redeemed_other_order | not_offered */
+                /** @description offer_expired | already_redeemed_other_order | not_offered | seats_not_selected */
                 409: components["responses"]["Error"];
             };
         };
@@ -604,6 +604,124 @@ export interface paths {
                 409: components["responses"]["Error"];
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/drops/{drop_id}/seats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Seat map after the draw. Green = absent, amber = locked, red = booked. Owners are never shown. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    drop_id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SeatMap"];
+                    };
+                };
+                404: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/offers/{offer_id}/seats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's seat choice and their rank-ordered seat window */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    offer_id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OfferSeats"];
+                    };
+                };
+                /** @description offer_not_yours */
+                403: components["responses"]["Error"];
+            };
+        };
+        /**
+         * Replace the caller's seat choice (0..quantity seats), atomically, during their wave window
+         * @description Newly chosen seats are locked for this offer; dropped seats are released. If any newly
+         *     chosen seat is already locked or booked, nothing changes: 409 seat_taken with `seats`.
+         *     Seats freeze when the offer is redeemed; paying books them, failing or expiring releases them.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    offer_id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        seats: number[];
+                    };
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OfferSeats"];
+                    };
+                };
+                /** @description too_many_seats | invalid_seat */
+                400: components["responses"]["Error"];
+                /** @description offer_not_yours */
+                403: components["responses"]["Error"];
+                /** @description seat_taken (seats) | seat_window_not_open (opens_at) | not_offered | offer_expired | seat_selection_disabled */
+                409: components["responses"]["Error"];
+            };
+        };
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -961,7 +1079,7 @@ export interface components {
         /** @enum {string} */
         EntryStatus: "registered" | "excluded" | "waitlisted" | "offered" | "payment_pending" | "confirmed" | "expired" | "declined" | "payment_failed" | "not_selected";
         /** @enum {string} */
-        ErrorCode: "window_closed" | "entry_exists_different_terms" | "unknown_tier" | "quantity_exceeds_max" | "turnstile_failed" | "offer_expired" | "offer_not_yours" | "already_redeemed_other_order" | "not_offered" | "payment_window_closed" | "not_payment_pending" | "payment_unavailable";
+        ErrorCode: "window_closed" | "entry_exists_different_terms" | "unknown_tier" | "quantity_exceeds_max" | "turnstile_failed" | "offer_expired" | "offer_not_yours" | "already_redeemed_other_order" | "not_offered" | "payment_window_closed" | "not_payment_pending" | "payment_unavailable" | "seat_taken" | "seat_window_not_open" | "seats_not_selected" | "too_many_seats" | "invalid_seat" | "seat_selection_disabled";
         /** @enum {string} */
         TransportError: "unauthorized" | "invalid_request" | "not_found" | "rate_limited" | "conflict";
         Error: {
@@ -1012,6 +1130,12 @@ export interface components {
             offer_ttl_s?: number;
             pay_deadline_s?: number;
             max_promotion_rounds?: number;
+            /** @description winners choose exact seats after the draw */
+            seat_selection?: boolean;
+            /** @description offers per tier per seat-choice wave, in rank order */
+            seat_wave_size?: number;
+            /** @description seconds between seat-choice waves */
+            seat_wave_s?: number;
             sybil_rules?: components["schemas"]["SybilRule"][];
             config_hash: string;
             drand_chain: string;
@@ -1068,6 +1192,12 @@ export interface components {
             pay_deadline_s: number;
             /** @default 6 */
             max_promotion_rounds: number;
+            /** @default false */
+            seat_selection: boolean;
+            /** @default 25 */
+            seat_wave_size: number;
+            /** @default 30 */
+            seat_wave_s: number;
             sybil_rules?: components["schemas"]["SybilRule"][];
             tiers: components["schemas"]["Tier"][];
         };
@@ -1173,6 +1303,41 @@ export interface components {
                 offer_id: string;
             }[];
         };
+        SeatMap: {
+            /** Format: uuid */
+            drop_id: string;
+            seat_selection: boolean;
+            /** Format: date-time */
+            server_time: string;
+            tiers: {
+                tier_id: string;
+                capacity: number;
+                /** @description amber: held by an offer choosing or paying */
+                locked: number[];
+                /** @description red: paid */
+                booked: number[];
+            }[];
+        };
+        OfferSeats: {
+            /** Format: uuid */
+            offer_id: string;
+            /** Format: uuid */
+            drop_id?: string;
+            tier_id: string;
+            quantity: number;
+            round?: number;
+            status: components["schemas"]["OfferStatus"];
+            seat_selection: boolean;
+            /** @description this offer's seats, 0-based row-major indexes */
+            seats: number[];
+            /** Format: date-time */
+            window_opens_at: string;
+            /** Format: date-time */
+            window_closes_at: string;
+            window_open: boolean;
+            /** Format: date-time */
+            server_time?: string;
+        };
         Invariants: {
             tiers: {
                 tier_id: string;
@@ -1181,6 +1346,8 @@ export interface components {
                 capacity: number;
             }[];
             oversell: number;
+            /** @description seat rows inconsistent with their offer; 0 when healthy */
+            seat_mismatch?: number;
             held_mismatch: number;
             double_redemption: number;
         };

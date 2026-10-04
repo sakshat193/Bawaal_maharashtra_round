@@ -18,9 +18,10 @@ def test_draw_uses_committed_allocation_mode(monkeypatch, mode):
         {"entry_id": "02" * 16, "tier_id": "main", "quantity": 1, "accepted_at": "2026-01-01T00:00:01Z"},
     ]
     proof_time = datetime(2020, 1, 1, tzinfo=timezone.utc)
-    # SELECT results: lock, existing draw, sealed snapshot, lock, existing draw, seal guard.
+    # SELECT results: lock, existing draw, sealed snapshot, lock, existing draw, seal guard,
+    # seat config (offer_ttl_s, seat_selection, seat_wave_size, seat_wave_s).
     one = AsyncMock(side_effect=[(True,), None, (1, "sealed", b"snapshot", {"proof": 1}, proof_time, mode),
-                                (True,), None, ("sealed", {"proof": 1}, proof_time)])
+                                (True,), None, ("sealed", {"proof": 1}, proof_time), (600, False, 25, 30)])
     monkeypatch.setattr(alloc, "_one", one)
     monkeypatch.setattr(alloc, "_all", AsyncMock(return_value=[("main", 2, 0)]))
     monkeypatch.setattr(alloc, "fetch_drand", AsyncMock(return_value={"signature": "ab", "randomness": "00" * 32}))

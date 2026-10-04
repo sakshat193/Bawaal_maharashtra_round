@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Fair Drop API
   # Bump on every change under contracts/; needs approval from the other three.
-  version: 0.2.0
+  version: 0.3.0
   description: |
     Skeleton copied from the four-person build plan. Owners per route are in
     x-owner. Every private route authenticates with the platform identity JWT
@@ -46,7 +46,9 @@ components:
       enum: [window_closed, entry_exists_different_terms, unknown_tier,
              quantity_exceeds_max, turnstile_failed, offer_expired, offer_not_yours,
              already_redeemed_other_order, not_offered, payment_window_closed,
-             not_payment_pending, payment_unavailable]
+             not_payment_pending, payment_unavailable,
+             seat_taken, seat_window_not_open, seats_not_selected, too_many_seats,
+             invalid_seat, seat_selection_disabled]
     TransportError:
       type: string
       enum: [unauthorized, invalid_request, not_found, rate_limited, conflict]
@@ -106,6 +108,9 @@ components:
             offer_ttl_s: { type: integer }
             pay_deadline_s: { type: integer }
             max_promotion_rounds: { type: integer }
+            seat_selection: { type: boolean, description: "winners choose exact seats after the draw" }
+            seat_wave_size: { type: integer, description: "offers per tier per seat-choice wave, in rank order" }
+            seat_wave_s: { type: integer, description: "seconds between seat-choice waves" }
             sybil_rules: { type: array, items: { $ref: "#/components/schemas/SybilRule" } }
             config_hash: { type: string, pattern: "^[0-9a-f]{64}$" }
             drand_chain: { type: string }
@@ -148,6 +153,9 @@ components:
         offer_ttl_s: { type: integer, default: 600 }
         pay_deadline_s: { type: integer, default: 300 }
         max_promotion_rounds: { type: integer, default: 6 }
+        seat_selection: { type: boolean, default: false }
+        seat_wave_size: { type: integer, default: 25, minimum: 1, maximum: 10000 }
+        seat_wave_s: { type: integer, default: 30, minimum: 0, maximum: 3600 }
         sybil_rules: { type: array, items: { $ref: "#/components/schemas/SybilRule" } }
         tiers: { type: array, minItems: 1, items: { $ref: "#/components/schemas/Tier" } }
 
@@ -272,6 +280,40 @@ components:
               round: { type: integer, minimum: 0 }
               offer_id: { type: string, format: uuid }
 
+    SeatMap:
+      type: object
+      required: [drop_id, seat_selection, server_time, tiers]
+      properties:
+        drop_id: { type: string, format: uuid }
+        seat_selection: { type: boolean }
+        server_time: { type: string, format: date-time }
+        tiers:
+          type: array
+          items:
+            type: object
+            required: [tier_id, capacity, locked, booked]
+            properties:
+              tier_id: { type: string }
+              capacity: { type: integer }
+              locked: { type: array, items: { type: integer }, description: "amber: held by an offer choosing or paying" }
+              booked: { type: array, items: { type: integer }, description: "red: paid" }
+    OfferSeats:
+      type: object
+      required: [offer_id, tier_id, quantity, status, seat_selection, seats, window_opens_at, window_closes_at, window_open]
+      properties:
+        offer_id: { type: string, format: uuid }
+        drop_id: { type: string, format: uuid }
+        tier_id: { type: string }
+        quantity: { type: integer }
+        round: { type: integer }
+        status: { $ref: "#/components/schemas/OfferStatus" }
+        seat_selection: { type: boolean }
+        seats: { type: array, items: { type: integer }, description: "this offer's seats, 0-based row-major indexes" }
+        window_opens_at: { type: string, format: date-time }
+        window_closes_at: { type: string, format: date-time }
+        window_open: { type: boolean }
+        server_time: { type: string, format: date-time }
+
     Invariants:
       type: object
       required: [tiers, oversell, held_mismatch, double_redemption]
@@ -287,6 +329,7 @@ components:
               active_offer_units: { type: integer, minimum: 0 }
               capacity: { type: integer, minimum: 0 }
         oversell: { type: integer, minimum: 0 }
+        seat_mismatch: { type: integer, minimum: 0, description: "seat rows inconsistent with their offer; 0 when healthy" }
         held_mismatch: { type: integer, minimum: 0 }
         double_redemption: { type: integer, minimum: 0 }
 
@@ -491,7 +534,7 @@ paths:
                   status: { $ref: "#/components/schemas/OfferStatus" }
                   pay_deadline: { type: string, format: date-time }
         "403": { description: offer_not_yours, $ref: "#/components/responses/Error" }
-        "409": { description: "offer_expired | already_redeemed_other_order | not_offered", $ref: "#/components/responses/Error" }
+        "409": { description: "offer_expired | already_redeemed_other_order | not_offered | seats_not_selected", $ref: "#/components/responses/Error" }
 
   /api/offers/{offer_id}/checkout:
     post:
@@ -540,6 +583,48 @@ paths:
         "200": { description: OK }
         "403": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+
+  /api/drops/{drop_id}/seats:
+    get:
+      x-owner: seat-selection
+      x-edge-cache: no-store
+      summary: Seat map after the draw. Green = absent, amber = locked, red = booked. Owners are never shown.
+      parameters: [{ name: drop_id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/SeatMap" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/offers/{offer_id}/seats:
+    get:
+      x-owner: seat-selection
+      security: [{ identityJwt: [] }]
+      summary: The caller's seat choice and their rank-ordered seat window
+      parameters: [{ name: offer_id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/OfferSeats" } } } }
+        "403": { description: offer_not_yours, $ref: "#/components/responses/Error" }
+    put:
+      x-owner: seat-selection
+      security: [{ identityJwt: [] }]
+      summary: Replace the caller's seat choice (0..quantity seats), atomically, during their wave window
+      description: |
+        Newly chosen seats are locked for this offer; dropped seats are released. If any newly
+        chosen seat is already locked or booked, nothing changes: 409 seat_taken with `seats`.
+        Seats freeze when the offer is redeemed; paying books them, failing or expiring releases them.
+      parameters: [{ name: offer_id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [seats]
+              properties: { seats: { type: array, maxItems: 4, items: { type: integer, minimum: 0 } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/OfferSeats" } } } }
+        "400": { description: "too_many_seats | invalid_seat", $ref: "#/components/responses/Error" }
+        "403": { description: offer_not_yours, $ref: "#/components/responses/Error" }
+        "409": { description: "seat_taken (seats) | seat_window_not_open (opens_at) | not_offered | offer_expired | seat_selection_disabled", $ref: "#/components/responses/Error" }
 
   /api/drops/{drop_id}/invariants:
     get:

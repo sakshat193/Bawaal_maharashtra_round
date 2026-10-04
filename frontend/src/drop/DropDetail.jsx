@@ -116,6 +116,7 @@ export default function DropDetail({ drop, invariants, entering, onEnter, onClos
           {fairOpen && (
             <section className="fd-fair">
               <p>Entries are sealed before the public randomness round. The server ranks eligible entries and offers tickets in that order.</p>
+              {drop.seat_selection && <p><b>Choosing seats</b><br />Winners choose exact seats in their section after the draw, in draw-rank order: groups of {drop.seat_wave_size} per section, each group {drop.seat_wave_s} seconds after the one before. Clicking faster never gets you a better seat.</p>}
               <p><b>Configuration</b><br /><code>{drop.config_hash}</code></p>
               <p><b>Drand round</b><br />{drop.drand_round.toLocaleString('en-IN')} · {drop.drand_round_due_at}</p>
               {drop.snapshot?.canonical_hash && <p><b>Sealed snapshot</b><br /><code>{drop.snapshot.canonical_hash}</code></p>}

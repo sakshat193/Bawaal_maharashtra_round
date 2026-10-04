@@ -103,6 +103,16 @@ function dropForScenario() {
   return getFixture(json, scenarioDropName(drop));
 }
 
+const mockSeats = new Map();
+function mockSeatView(offerId) {
+  const offer = getFixture(json, scenarioMeName('offered')).offer || {};
+  const now = Date.now();
+  return { offer_id: offerId, tier_id: offer.tier_id, quantity: offer.quantity, round: 0, status: 'offered',
+    seat_selection: true, seats: mockSeats.get(offerId)?.seats || [],
+    window_opens_at: new Date(now - 1000).toISOString(), window_closes_at: new Date(now + 60000).toISOString(),
+    window_open: true, server_time: new Date(now).toISOString() };
+}
+
 export const worker = setupWorker(
   http.get('/api/drops', () => {
     const fixture = getFixture(json, 'listDrops.200.json');
@@ -191,6 +201,21 @@ export const worker = setupWorker(
     if (error) return error;
     setScenario('offered');
     return HttpResponse.json(getFixture(json, 'adminDraw.200.json'));
+  }),
+  // Seat selection (offline): one in-memory choice per offer; the window is always open.
+  http.get('/api/drops/:dropId/seats', ({ params }) => {
+    const drop = dropForScenario();
+    return HttpResponse.json({
+      drop_id: params.dropId, seat_selection: Boolean(drop.seat_selection), server_time: new Date().toISOString(),
+      tiers: drop.tiers.map(tier => ({ tier_id: tier.tier_id, capacity: tier.capacity,
+        locked: [...mockSeats.values()].flatMap(v => v.tier_id === tier.tier_id ? v.seats : []), booked: [] }))
+    });
+  }),
+  http.get('/api/offers/:offerId/seats', ({ params }) => HttpResponse.json(mockSeatView(params.offerId))),
+  http.put('/api/offers/:offerId/seats', async ({ params, request }) => {
+    const { seats = [] } = await request.json();
+    mockSeats.set(params.offerId, { tier_id: mockSeatView(params.offerId).tier_id, seats });
+    return HttpResponse.json(mockSeatView(params.offerId));
   }),
   http.get('/api/admin/drops/:dropId/outcomes', () => HttpResponse.json(getFixture(json, 'adminOutcomes.200.json'))),
   http.post('/api/admin/reset', () => {
