@@ -15,6 +15,7 @@ from ..entry.admin_auth import require_admin
 from ..errors import ApiError
 from fairdrop_common.drand import fetch as fetch_drand, time_of
 from fairdrop_common._compat import canonical
+from fairdrop_common.rank import fcfs_order, lottery_order
 from .payments import PaymentProviderError, create_order, verify_payment
 
 logger = logging.getLogger(__name__)
@@ -61,16 +62,6 @@ class _Connection:
 def conn():
     with get_pool().connection() as connection:
         yield _Connection(connection)
-
-
-def lottery_order(entries: list[dict[str, Any]], drop_id: uuid.UUID, randomness: str) -> list[dict[str, Any]]:
-    """Use Member 4's WIL implementation when it lands; keep the import seam stable."""
-    try:
-        from fairdrop_common.rank import lottery_order as real_lottery_order
-    except ModuleNotFoundError:
-        # The draw is guarded by real snapshot/rank integration tests before release.
-        return sorted(entries, key=lambda entry: entry["entry_id"])
-    return real_lottery_order(entries, drop_id, randomness)
 
 
 def _now() -> datetime:
@@ -408,11 +399,11 @@ async def _draw_drop(connection: Any, drop_id: uuid.UUID) -> bool:
         if existing:
             return False
         row = await _one(connection,
-            """SELECT d.drand_round,d.phase,s.canonical_blob,s.timestamp_proof,s.timestamped_at
+            """SELECT d.drand_round,d.phase,s.canonical_blob,s.timestamp_proof,s.timestamped_at,d.allocation_mode
                  FROM drops d JOIN snapshots s USING(drop_id) WHERE d.drop_id=%s FOR UPDATE OF d""", (drop_id,))
         if row is None:
             return False
-        round_number, phase, blob, proof, timestamped_at = row
+        round_number, phase, blob, proof, timestamped_at, allocation_mode = row
         if phase != "sealed" or not proof or not timestamped_at or timestamped_at >= datetime.fromtimestamp(time_of(round_number), timezone.utc):
             return False
 
@@ -421,7 +412,12 @@ async def _draw_drop(connection: Any, drop_id: uuid.UUID) -> bool:
     _header, entries = canonical.parse_snapshot(bytes(blob))
     if not isinstance(entries, list):
         raise ValueError("snapshot entries must be a list")
-    ranked = lottery_order(entries, drop_id, beacon["randomness"])
+    if allocation_mode == "fcfs":
+        ranked = fcfs_order(entries)
+    elif allocation_mode == "lottery_wil":
+        ranked = lottery_order(entries, drop_id, beacon["randomness"])
+    else:
+        raise ValueError(f"unknown allocation mode: {allocation_mode!r}")
     async with connection.transaction():
         lock = await _one(connection, "SELECT pg_try_advisory_xact_lock(hashtextextended(%s,0))", (f"draw:{drop_id}",))
         if not lock or not lock[0] or await _one(connection, "SELECT 1 FROM draws WHERE drop_id=%s", (drop_id,)):
