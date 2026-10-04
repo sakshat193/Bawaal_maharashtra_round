@@ -1,10 +1,13 @@
 import asyncio
 import hashlib
 import json
+import math
+from datetime import datetime
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
 DRAND_CHAIN_HASH = "52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971"
+CHAIN = DRAND_CHAIN_HASH
 DRAND_RELAYS = (
     f"https://api.drand.sh/{DRAND_CHAIN_HASH}/public",
     f"https://drand.cloudflare.com/{DRAND_CHAIN_HASH}/public",
@@ -13,8 +16,10 @@ GENESIS = 1692803367
 PERIOD = 3
 
 
-def round_at(timestamp: int) -> int:
+def round_at(timestamp: int | datetime) -> int:
     """Return the first Quicknet round whose due time is at or after timestamp."""
+    if isinstance(timestamp, datetime):
+        timestamp = math.ceil(timestamp.timestamp())
     if timestamp <= GENESIS:
         return 1
     return 1 + (timestamp - GENESIS + PERIOD - 1) // PERIOD

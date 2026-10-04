@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import json
 import unittest
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 from urllib.error import HTTPError
 
@@ -31,6 +32,16 @@ def beacon(round_number, signature="ab"):
 
 
 class DrandTimingTests(unittest.TestCase):
+    def test_datetime_rounds_ceil_subseconds_and_export_chain(self):
+        self.assertEqual(drand.CHAIN, drand.DRAND_CHAIN_HASH)
+        for offset in (0, 0.1, 1, 3, 3.1, 17):
+            timestamp = drand.GENESIS + offset
+            value = datetime.fromtimestamp(timestamp, timezone.utc)
+            round_number = drand.round_at(value)
+            self.assertGreaterEqual(drand.time_of(round_number), timestamp)
+            if round_number > 1:
+                self.assertLess(drand.time_of(round_number - 1), timestamp)
+
     def test_round_at_returns_the_first_due_round(self):
         self.assertEqual(drand.round_at(drand.GENESIS - 1), 1)
         self.assertEqual(drand.round_at(drand.GENESIS), 1)
