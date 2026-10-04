@@ -78,11 +78,13 @@ def _now() -> datetime:
 
 
 async def _one(connection: Any, sql: str, params: tuple = ()) -> tuple | None:
-    return connection.execute(sql, params).fetchone()
+    cursor = await connection.execute(sql, params)
+    return await cursor.fetchone()
 
 
 async def _all(connection: Any, sql: str, params: tuple = ()) -> list[tuple]:
-    return connection.execute(sql, params).fetchall()
+    cursor = await connection.execute(sql, params)
+    return await cursor.fetchall()
 
 
 @router.get("/drops/{drop_id}/me", operation_id="getMe")
