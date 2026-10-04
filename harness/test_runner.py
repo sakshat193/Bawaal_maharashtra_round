@@ -1,5 +1,7 @@
 from pathlib import Path
 import asyncio
+import hashlib
+import httpx
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock
 
@@ -16,7 +18,7 @@ def test_summary_keeps_profile_classification():
     for index, user in enumerate(users):
         user["identity_id"] = f"identity-{index}"
         user["entry_id"] = f"entry-{index}"
-    result = _summarize("lottery_wil", users, [], {}, {})
+    result = _summarize("lottery_wil", users, [], {}, {}, [])
     for name, spec in profiles.items():
         if spec["count"]:
             assert result["profiles"][name]["bot"] is bool(spec.get("bot", False))
@@ -62,3 +64,26 @@ def test_invariants_preserve_real_duplicate_counter():
     del value["double_redemption"]
     with pytest.raises(RuntimeError, match="double_redemption"):
         _invariant_summary(value)
+
+
+def test_published_exclusions_bind_rules_and_populate_counts():
+    from fairdrop_common import canonical
+    profiles, users = load_users(Path('harness/profiles.yaml'))
+    for index, user in enumerate(users):
+        user['entry_id'] = f'{index:032x}'
+    rows = [{'entry_id': user['entry_id'], 'reason': 'sybil:device'}
+            for user in users if user['profile'] == 'sybil_cluster']
+    blob = canonical.exclusions_bytes(rows)
+    api = type('Api', (), {'request': AsyncMock(return_value=httpx.Response(
+        200, content=blob, headers={'X-Fairdrop-Exclusions-Hash': hashlib.sha256(blob).hexdigest()}))})()
+    drop = {'drop_id': 'test', 'sybil_rules': [{'id': 'device', 'kind': 'max_per_device', 'limit': 2}]}
+    published = asyncio.run(runner._published_exclusions(api, drop, users))
+    result = _summarize('lottery_wil', users, [], {}, {}, published)
+    assert result['exclusions_per_rule'] == {'sybil:device': profiles['sybil_cluster']['count']}
+    api.request.return_value = httpx.Response(200, content=b'', headers={
+        'X-Fairdrop-Exclusions-Hash': hashlib.sha256(b'').hexdigest()})
+    with pytest.raises(RuntimeError, match='frozen Sybil rules'):
+        asyncio.run(runner._published_exclusions(api, drop, users))
+    api.request.return_value = httpx.Response(200, content=blob, headers={'X-Fairdrop-Exclusions-Hash': '0' * 64})
+    with pytest.raises(RuntimeError, match='hash'):
+        asyncio.run(runner._published_exclusions(api, drop, users))

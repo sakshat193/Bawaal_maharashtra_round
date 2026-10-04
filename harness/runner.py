@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import json
 import math
 import os
@@ -12,10 +13,11 @@ from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from fairdrop_common import canonical, sybil
+
 from .api import FairDropApi, bearer_token
 from .attacks import run_attacks
 from .profiles import load_users
-
 
 GENESIS = 1692803367
 PERIOD = 3
@@ -158,7 +160,25 @@ def _invariant_summary(value: dict) -> dict:
     }
 
 
-def _summarize(mode: str, users: list[dict], outcomes: list[dict], invariants: dict, attacks: dict) -> dict:
+async def _published_exclusions(api: FairDropApi, drop: dict, users: list[dict]) -> list[dict]:
+    response = await api.request('GET', f"/api/drops/{drop['drop_id']}/exclusions")
+    if response.status_code != 200:
+        raise RuntimeError(f'exclusions returned {response.status_code}')
+    blob = response.content
+    if hashlib.sha256(blob).hexdigest() != response.headers.get('X-Fairdrop-Exclusions-Hash'):
+        raise RuntimeError('published exclusions hash does not match bytes')
+    rows = [json.loads(line) for line in blob.splitlines()]
+    if canonical.exclusions_bytes(rows) != blob:
+        raise RuntimeError('published exclusions are not canonical')
+    facts = [{'entry_id': user['entry_id'], **user['risk']} for user in users]
+    expected = sybil.apply(drop['sybil_rules'], facts)
+    if [(row['entry_id'], row['reason']) for row in rows] != expected:
+        raise RuntimeError('published exclusions do not match frozen Sybil rules')
+    return rows
+
+
+def _summarize(mode: str, users: list[dict], outcomes: list[dict], invariants: dict, attacks: dict,
+               exclusion_rows: list[dict]) -> dict:
     profile_users = {}
     for user in users:
         profile_users.setdefault(user["profile"], []).append(user)
@@ -170,6 +190,9 @@ def _summarize(mode: str, users: list[dict], outcomes: list[dict], invariants: d
         for name, group in profile_users.items()
     }
     exclusions = {}
+    for row in exclusion_rows:
+        reason = row['reason']
+        exclusions[reason] = exclusions.get(reason, 0) + 1
     won = bot_won = total_won = groups_won = singles_won = 0
     bot_ids = set()
     all_ids = set()
@@ -183,9 +206,6 @@ def _summarize(mode: str, users: list[dict], outcomes: list[dict], invariants: d
         user = by_entry.get(outcome.get("entry_id")) or by_identity.get(outcome.get("identity_id"))
         if not user:
             continue
-        reason = outcome.get("exclusion_reason")
-        if reason:
-            exclusions[reason] = exclusions.get(reason, 0) + 1
         if outcome.get("status") in ACTIVE:
             quantity = int(outcome.get("quantity", user["quantity"]))
             counts[user["profile"]]["tickets_won"] += quantity
@@ -275,9 +295,10 @@ async def run_harness(base_url: str, profiles_path: Path, out_path: Path, worker
             invariants_value = await api.checked(
                 "GET", f"/api/drops/{drop['drop_id']}/invariants"
             )
+            exclusion_rows = await _published_exclusions(api, drop, users_for_drop)
             mode_results.append(_summarize(
                 drop["mode"], users_for_drop, outcomes,
-                _invariant_summary(invariants_value), attack_checks,
+                _invariant_summary(invariants_value), attack_checks, exclusion_rows,
             ))
         result = {"schema_version": 1, "source": "live_harness", "modes": mode_results}
         out_path.parent.mkdir(parents=True, exist_ok=True)
