@@ -82,30 +82,6 @@ async def run_attacks(api: FairDropApi, drop_id: str, users: list[dict]) -> dict
     else:
         results["double_redeem"] = _result(False, "exactly one 200", "no offer")
 
-    late_user = action_users["late_payer"]
-    late_offer = offers.get("late_payer")
-    if late_offer and late_offer.get("expires_at"):
-        expiry = datetime.fromisoformat(late_offer["expires_at"].replace("Z", "+00:00")).astimezone(timezone.utc)
-        await asyncio.sleep(max(0, (expiry - datetime.now(timezone.utc)).total_seconds() - 1))
-        order_id = str(uuid.uuid4())
-        redeem = await _redeem(api, late_offer["offer_id"], late_user["token"], order_id)
-        if redeem.status_code == 200:
-            await asyncio.sleep(30)
-            payment = await api.request(
-                "POST", f"/api/offers/{late_offer['offer_id']}/pay", token=late_user["token"],
-                body={"order_id": order_id, "result": "success"},
-            )
-            payment_body = api.payload(payment)
-            status = payment_body.get("status", payment.status_code)
-            results["late_payer"] = _result(
-                payment.status_code == 200 and status == "confirmed",
-                "confirmed after the offer deadline", status,
-            )
-        else:
-            results["late_payer"] = _result(False, "redeem before expiry; then confirm", redeem.status_code)
-    else:
-        results["late_payer"] = _result(False, "offer has an expiry", "no offer")
-
     fail_user = action_users["payment_failer"]
     fail_offer = offers.get("payment_failer")
     if fail_offer:
@@ -134,5 +110,30 @@ async def run_attacks(api: FairDropApi, drop_id: str, users: list[dict]) -> dict
     stable = lambda value: {key: value.get(key) for key in ("phase", "entry", "offer")}
     same = json.dumps(stable(first), sort_keys=True) == json.dumps(stable(second), sort_keys=True)
     results["reconnect"] = _result(same, "same entry and offer after a fresh login", "same" if same else "changed")
+    # Run the long deadline check after interactions that need unexpired offers.
+    late_user = action_users["late_payer"]
+    late_offer = offers.get("late_payer")
+    if late_offer and late_offer.get("expires_at"):
+        expiry = datetime.fromisoformat(late_offer["expires_at"].replace("Z", "+00:00")).astimezone(timezone.utc)
+        await asyncio.sleep(max(0, (expiry - datetime.now(timezone.utc)).total_seconds() - 1))
+        order_id = str(uuid.uuid4())
+        redeem = await _redeem(api, late_offer["offer_id"], late_user["token"], order_id)
+        if redeem.status_code == 200:
+            await asyncio.sleep(30)
+            payment = await api.request(
+                "POST", f"/api/offers/{late_offer['offer_id']}/pay", token=late_user["token"],
+                body={"order_id": order_id, "result": "success"},
+            )
+            payment_body = api.payload(payment)
+            status = payment_body.get("status", payment.status_code)
+            results["late_payer"] = _result(
+                payment.status_code == 200 and status == "confirmed",
+                "confirmed after the offer deadline", status,
+            )
+        else:
+            results["late_payer"] = _result(False, "redeem before expiry; then confirm", redeem.status_code)
+    else:
+        results["late_payer"] = _result(False, "offer has an expiry", "no offer")
+
     return results
 
