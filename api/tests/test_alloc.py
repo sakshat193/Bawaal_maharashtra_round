@@ -1,7 +1,6 @@
 """Member 3 offer lifecycle checks against the shared Postgres schema."""
 
 import asyncio
-import json
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
