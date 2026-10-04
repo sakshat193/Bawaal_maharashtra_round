@@ -200,4 +200,4 @@ def test_drand_round_leaves_margin(client):
     did = make_open_drop(client)
     d = client.get(f"/api/drops/{did}").json()
     due = datetime.fromisoformat(d["drand_round_due_at"])
-    assert due - datetime.fromisoformat(d["closes_at"]) >= timedelta(seconds=120)
+    assert due - datetime.fromisoformat(d["closes_at"]) >= timedelta(seconds=90)

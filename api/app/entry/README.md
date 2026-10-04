@@ -43,7 +43,7 @@ After `POST /api/admin/reset`, the demo drop opens about 10 s later through the 
 - In tests, set `app.dependency_overrides[current_identity] = lambda: Identity("id_x", None, None, None)`.
 - Draw precondition: `app.entry.seal.snapshot_drawable(snapshot_row, drop_row)`. It is true only when a timestamp proof exists and `timestamped_at < time_of(R)`.
 - `main.py` mounts `app.alloc.router` automatically once `api/app/alloc/__init__.py` exports `router`.
-- To get a 50k sealed drop: `python scripts/seed_entries.py --n 50000`. Round R is due about 2 minutes after the seal.
+- To get a 50k sealed drop: `python scripts/seed_entries.py --n 50000`. Round R is due about 90 seconds after the seal.
 
 **Member 4: please confirm these calling conventions**
 - Every argument I pass to `canonical.*` is already JSON-ready: UUIDs are strings and timestamps are `Z` strings. `accepted_at` always has 6 microsecond digits.
@@ -77,7 +77,7 @@ After `POST /api/admin/reset`, the demo drop opens about 10 s later through the 
 | Verify one entry at the seal | ~22 ms per core |
 | Cheapest phone | **TODO**: open the entry form on the cheapest phone you can borrow and record it here |
 
-**The seal has to beat round R.** Verifying 50,000 PoW entries takes about 1,100 core-seconds, roughly 2–3 minutes on 8 cores. The default 120-second `DRAND_MARGIN_S` does not cover that.
+**The seal has to beat round R.** Verifying 50,000 PoW entries takes about 1,100 core-seconds, roughly 2–3 minutes on 8 cores. The default 90-second `DRAND_MARGIN_S` does not cover that.
 
 - For a large PoW drop, raise `DRAND_MARGIN_S`, or lower `pow_k` or `pow_memory_kib`.
 - Demo-size drops (hundreds of entries) seal in seconds.

@@ -46,7 +46,7 @@ class Settings:
     trusted_proxies: list[str] = field(default_factory=lambda: _list("TRUSTED_PROXIES"))
 
     # Margin between closes_at and round R: must cover the seal and the timestamp.
-    drand_margin_s: int = field(default_factory=lambda: max(120, int(os.environ.get("DRAND_MARGIN_S", "120"))))
+    drand_margin_s: int = field(default_factory=lambda: max(90, int(os.environ.get("DRAND_MARGIN_S", "90"))))
 
     scheduler_enabled: bool = field(default_factory=lambda: _bool("SCHEDULER_ENABLED", True))
 
